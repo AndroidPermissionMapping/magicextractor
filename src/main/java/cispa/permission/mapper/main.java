@@ -2,9 +2,12 @@ package cispa.permission.mapper;
 
 import java.io.*;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import cispa.permission.mapper.magic.AnalyzeRefs;
+import org.apache.commons.cli.*;
 import soot.*;
 import soot.jimple.*;
 import soot.jimple.internal.*;
@@ -17,25 +20,51 @@ public class main {
     private static final String DEXES_FOLDER = "./dex/";
     private static final String ANDROID_JARS = "./android-platforms/";
 
-    private static ArrayList<SootClass> allClasses = new ArrayList<SootClass>();
-    private static ArrayList<SootClass> intermediateCPClasses = new ArrayList<SootClass>();
-    private static ArrayList<SootClass> intermediateCPClasses2 = new ArrayList<SootClass>();
-    public static Callgraph callgraph = new Callgraph();
-    public static AnalyzeMethod analyzeMethod = new AnalyzeMethod();
-
 
 
     public static void main(String[] args) throws IOException {
-        File dir = new File(DEXES_FOLDER);
-        File [] files = dir.listFiles(new FilenameFilter() {
+        Options options = new Options();
 
-            @Override
-            public boolean accept(File dir, String name) {
-                return name.endsWith("ContactsProvider.dex");
-            }
-        });
+        Option opt_output = new Option("o", "output", true, "output file path (required)");
+        opt_output.setRequired(true);
+        options.addOption(opt_output);
 
-        File f = new File("result.json");
+        Option opt_soot = new Option("s", "soot", true, "soot output folder");
+        opt_soot.setRequired(false);
+        options.addOption(opt_soot);
+
+        Option opt_dexes = new Option("d", "dexes", true, "dexes folder (required)");
+        opt_dexes.setRequired(true);
+        options.addOption(opt_dexes);
+
+
+        Option opt_jars = new Option("a", "android", true, "android jars folder (required)");
+        opt_jars.setRequired(true);
+        options.addOption(opt_jars);
+
+        Option opt_ints = new Option("i", "dont-ignore-ints", false, "Don't ignore ints in analysis");
+        opt_ints.setRequired(false);
+        options.addOption(opt_ints);
+
+        CommandLineParser parser = new DefaultParser();
+        HelpFormatter formatter = new HelpFormatter();
+        CommandLine cmd;
+
+        try {
+            cmd = parser.parse(options, args);
+            AnalyzeRefs.IGNORE_INTS = cmd.getOptionValue("dont-ignore-ints") == null;
+            start(cmd.getOptionValue("output"), cmd.getOptionValue("soot"), cmd.getOptionValue("dexes"), cmd.getOptionValue("android"));
+        } catch (ParseException e) {
+            System.out.println(e.getMessage());
+            formatter.printHelp("./magicextractor", options);
+        }
+    }
+
+    public static void start(String outfile, String output_folder, String dexes_folder, String android_jars) throws IOException {
+        File dir = new File(dexes_folder);
+        File [] files = dir.listFiles((dir1, name) -> name.endsWith(".dex"));
+
+        File f = new File(outfile);
         f.delete();
         f.createNewFile();
         BufferedWriter myWriter = new BufferedWriter(new FileWriter(f));
@@ -44,6 +73,7 @@ public class main {
             Utils.f = myWriter;
 
             for (File file : files) {
+                System.out.println(file.getPath());
                 Pack p = PackManager.v().getPack("jtp");
                 p.add(new Transform("jtp.myTransform", new BodyTransformer() {
                     @Override
@@ -58,26 +88,26 @@ public class main {
                     }
                 }));
 
-                System.out.println(file.getPath());
-
-                String[] sootOptions = {
-                        "-w",
+                ArrayList<String> sootOptions = new ArrayList<>(Arrays.asList("-w",
                         "-allow-phantom-refs",
-                        "-android-jars", ANDROID_JARS,
+                        "-android-jars", android_jars,
                         "-v",
                         "-src-prec", "apk",
                         "-f", "jimple",
                         "-process-dir", file.getPath(),
                         "-keep-line-number",
-                        "-output-dir", OUTPUT,
-                        "-process-multiple-dex"
-                };
+                        "-process-multiple-dex"));
+
+                if (output_folder != null){
+                    sootOptions.add("-output-dir");
+                    sootOptions.add(output_folder);
+                }
 
                 try {
-                    soot.Main.main(sootOptions);
+                    soot.Main.main(sootOptions.toArray(new String[0]));
                     G.reset();
                 } catch (Exception e) {
-                    // Nothing
+                    e.printStackTrace();
                 }
             }
         }
@@ -120,7 +150,7 @@ public class main {
         for (Unit bx : units){
             Stmt s = (Stmt) bx;
             if (s instanceof JInvokeStmt) {
-                InvokeExpr invoke = ((JInvokeStmt) s).getInvokeExpr();
+                InvokeExpr invoke = s.getInvokeExpr();
                 if(invoke.getMethod().getName().equals("addURI") && invoke.getMethod().getDeclaringClass().getName().equals("android.content.UriMatcher")){
                     String uri;
                     try {

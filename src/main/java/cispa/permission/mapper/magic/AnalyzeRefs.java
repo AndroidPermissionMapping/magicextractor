@@ -22,7 +22,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
     private Frame frame = new Frame();
     private Value ret;
-    private boolean IGNORE_INTS = true;
+    public static boolean IGNORE_INTS = false;
 
     public class NoBodyException extends RuntimeException {
 
@@ -147,8 +147,12 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
     public Frame apply(Value value){
+        return apply(value, new Frame());
+    }
+
+    public Frame apply(Value value, Frame f){
         Frame prev_frame = frame;
-        frame = new Frame();
+        frame = f;
         value.apply(this);
         Frame result = frame;
         frame = prev_frame;
@@ -166,16 +170,19 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         if (right instanceof Constant){
             constants.put(left, (Constant) right);
         }
-        else {
-            Frame result = apply(right);
+        else if (left instanceof Local) {
+            State s = new State((Local) left, method);
+            Frame f = new Frame();
+            f.left_state = s;
+            Frame result = apply(right, f);
             if (!result.observed.isEmpty()) {
-                if (left instanceof Local) {
-                    // todo: ArrayRef are not locals
-                    State s = new State((Local) left, method);
-                    s.addParents(result.observed);
-                    states.putIfAbsent(s.local, s);
-                }
+                s.addParents(result.observed);
+                states.putIfAbsent(s.local, s);
             }
+        }
+        else {
+            // TODO: handle JArrayRef correctly
+            apply(right);
         }
 
     }
@@ -471,13 +478,13 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             }
             case "android.os.Bundle": {
                 if (callee.getName().startsWith("get") && base_state != null && arg_constant[0] != null){
-                    base_state.bundle_elements.add(new BundleElement(callee.getReturnType(), arg_constant[0]));
+                    base_state.bundle_elements.add(new BundleElement(callee.getReturnType(), arg_constant[0], frame.left_state));
                 }
                 break;
             }
             case "android.content.ContentValues": {
                 if (callee.getName().startsWith("get") && base_state != null && arg_constant[0] != null){
-                    base_state.cv_elements.add(new BundleElement(callee.getReturnType(), arg_constant[0]));
+                    base_state.cv_elements.add(new BundleElement(callee.getReturnType(), arg_constant[0], frame.left_state));
                 }
                 break;
             }

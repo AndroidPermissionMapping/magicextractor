@@ -10,17 +10,30 @@ public class BundleElement{
     public final String name;
     public final Object value;
     public final boolean has_default_value;
+    public final State value_state;
 
     public BundleElement(Type type, String name){
         this.type = type;
         this.name = name;
         this.value = null;
+        this.value_state = null;
         has_default_value = false;
     }
+
+
+    public BundleElement(Type type, String name, State value_state){
+        this.type = type;
+        this.name = name;
+        this.value = null;
+        this.value_state = value_state;
+        has_default_value = false;
+    }
+
     public BundleElement(Type type, String name, Object value){
         this.value = value;
         this.type = type;
         this.name = name;
+        this.value_state = null;
         has_default_value = true;
     }
     public JSONObject toJSON(){
@@ -29,6 +42,8 @@ public class BundleElement{
         param_obj.put("type", type);
         if (has_default_value)
             param_obj.put("default", value);
+        if (value_state != null)
+            param_obj.put("value", value_state.toJSON());
         return param_obj;
     }
 
