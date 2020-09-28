@@ -1,13 +1,13 @@
 package cispa.permission.mapper.magic;
 
 import cispa.permission.mapper.Utils;
+import cispa.permission.mapper.model.CallMethodAndArg;
 import org.json.JSONArray;
 import soot.*;
 import soot.jimple.*;
 import soot.util.ArraySet;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
 
 public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
@@ -24,9 +24,11 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     private Value ret;
     public static boolean IGNORE_INTS = false;
 
+    private final Set<CallMethodAndArg> callMethodAndArgSet = new HashSet<>();
+
     public class NoBodyException extends RuntimeException {
 
-        public NoBodyException(SootMethod m){
+        public NoBodyException(SootMethod m) {
             super("no method source set for method: " + m.getSignature());
         }
 
@@ -34,7 +36,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
     public class TooDeepException extends RuntimeException {
 
-        public TooDeepException(SootMethod m){
+        public TooDeepException(SootMethod m) {
             super("max recursion depth reached at method: " + m.getSignature());
         }
 
@@ -42,13 +44,13 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
     public class LoopException extends RuntimeException {
 
-        public LoopException(SootMethod m){
+        public LoopException(SootMethod m) {
             super("Loop at method: " + m.getSignature());
         }
 
     }
 
-    public AnalyzeRefs(SootMethod m, int depth, AnalyzeRefs parent){
+    public AnalyzeRefs(SootMethod m, int depth, AnalyzeRefs parent) {
         this.parent = parent;
         this.depth = depth;
         method = m;
@@ -56,8 +58,8 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
         ArraySet<String> parents = new ArraySet<>();
 
-        for (AnalyzeRefs cursor = this; cursor != null; cursor = cursor.parent){
-            if (parents.contains(cursor.method.getSignature())){
+        for (AnalyzeRefs cursor = this; cursor != null; cursor = cursor.parent) {
+            if (parents.contains(cursor.method.getSignature())) {
                 throw new LoopException(m);
             }
             parents.add(cursor.method.getSignature());
@@ -70,56 +72,56 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             throw new TooDeepException(m);
         }
 
-        if (!m.hasActiveBody()){
+        if (!m.hasActiveBody()) {
             throw new NoBodyException(m);
         }
 
         body = (JimpleBody) m.retrieveActiveBody();
-        for (Local l: body.getParameterLocals()){
+        for (Local l : body.getParameterLocals()) {
             states.put(l, new State(l, method));
         }
-        for (Unit u: body.getUnits()){
-            units.add((Stmt)u);
+        for (Unit u : body.getUnits()) {
+            units.add((Stmt) u);
         }
     }
 
 
-    public AnalyzeRefs(SootMethod m, int depth){
+    public AnalyzeRefs(SootMethod m, int depth) {
         System.out.println("[" + depth + "] Created Analyzer for Method " + m.getSignature());
         if (depth > max_depth) {
             throw new TooDeepException(m);
         }
         method = m;
 
-        if (!m.hasActiveBody()){
+        if (!m.hasActiveBody()) {
             throw new NoBodyException(m);
         }
 
         body = (JimpleBody) m.retrieveActiveBody();
-        for (Local l: body.getParameterLocals()){
+        for (Local l : body.getParameterLocals()) {
             states.put(l, new State(l, method));
         }
-        for (Unit u: body.getUnits()){
-            units.add((Stmt)u);
+        for (Unit u : body.getUnits()) {
+            units.add((Stmt) u);
         }
         this.depth = depth;
     }
 
-    public void analyze(){
-        for (Stmt s: units){
+    public void analyze() {
+        for (Stmt s : units) {
             //System.out.println(s);
             s.apply(this);
         }
     }
 
-    public void run(){
+    public void run() {
         analyze();
         reportResult(getLocalStates());
     }
 
     public ArrayList<State> getLocalStates() {
         ArrayList<State> result = new ArrayList<>();
-        for (Local l: body.getParameterLocals()){
+        for (Local l : body.getParameterLocals()) {
             State s = states.get(l);
             s.eatChildren();
             result.add(s);
@@ -127,9 +129,32 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         return result;
     }
 
-    public void reportResult(ArrayList<State> states){
+    public void reportResult(ArrayList<State> states) {
+        if (method.getName().equals("call")) {
+            final int numberOfArgs = states.size();
+            final State firstArg = states.get(0);
+            final State secondArg = states.get(1);
+
+            if (numberOfArgs == 3) { // ContentProvider.call(..) with uri
+                CallMethodAndArg callData = new CallMethodAndArg(firstArg.magic_equals, secondArg.magic_equals);
+                callMethodAndArgSet.add(callData);
+
+            } else if (numberOfArgs == 4) { // ContentProvider.call(..) with authority - API 29+
+                // Process 1st arg - authority (String)
+                if (!firstArg.magic_equals.isEmpty()) {
+                    throw new IllegalStateException("Not implemented - call API 29+");
+                }
+
+            } else {
+                throw new IllegalStateException("Not implemented");
+            }
+
+
+        }
+
+
         JSONArray obj = new JSONArray();
-        for (State s: states){
+        for (State s : states) {
             obj.put(s.toJSON());
         }
         Utils.result(method, obj, "AnalyzeRefs");
@@ -146,11 +171,11 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         frame = apply(stmt.getInvokeExpr());
     }
 
-    public Frame apply(Value value){
+    public Frame apply(Value value) {
         return apply(value, new Frame());
     }
 
-    public Frame apply(Value value, Frame f){
+    public Frame apply(Value value, Frame f) {
         Frame prev_frame = frame;
         frame = f;
         value.apply(this);
@@ -167,10 +192,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         Value left = stmt.getLeftOp();
         //System.out.println("left" +  left.getClass().toString());
         //System.out.println("right" +  right.getClass().toString());
-        if (right instanceof Constant){
+        if (right instanceof Constant) {
             constants.put(left, (Constant) right);
-        }
-        else if (left instanceof Local) {
+        } else if (left instanceof Local) {
             State s = new State((Local) left, method);
             Frame f = new Frame();
             f.left_state = s;
@@ -179,17 +203,16 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                 s.addParents(result.observed);
                 states.putIfAbsent(s.local, s);
             }
-        }
-        else {
+        } else {
             // TODO: handle JArrayRef correctly
             apply(right);
         }
 
     }
 
-    public State lookupState(Value v){
+    public State lookupState(Value v) {
         State s = states.getOrDefault(v, null);
-        if (s != null){
+        if (s != null) {
             frame.observed.add(s);
         }
         return s;
@@ -268,7 +291,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
     @Override
     public void caseDoubleConstant(DoubleConstant v) {
-        if (!IGNORE_INTS){
+        if (!IGNORE_INTS) {
             frame.constant = Double.toString(v.value);
         }
     }
@@ -357,10 +380,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     public void caseBinopExpr(BinopExpr v) {
         Frame r1 = apply(v.getOp1());
         Frame r2 = apply(v.getOp2());
-        if (r1.constant != null && r2.state != null){
+        if (r1.constant != null && r2.state != null) {
             r2.state.magic_equals.add(r1.constant);
-        }
-        else if (r2.constant != null && r1.state != null){
+        } else if (r2.constant != null && r1.state != null) {
             r1.state.magic_equals.add(r2.constant);
         }
         // other cases are not relevant for magic
@@ -438,7 +460,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
 
-    public boolean InvokeHook(InvokeExpr v){
+    public boolean InvokeHook(InvokeExpr v) {
         SootMethod callee = v.getMethod();
         String signature = callee.getSignature();
         String clazz = callee.getDeclaringClass().getName();
@@ -447,7 +469,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         State base_state = null;
         String base_constant = null;
         if (v instanceof VirtualInvokeExpr) {
-            base = ((VirtualInvokeExpr)v).getBase();
+            base = ((VirtualInvokeExpr) v).getBase();
             Frame res = apply(base);
             base_state = res.state;
             base_constant = res.constant;
@@ -456,7 +478,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         State[] arg_state = new State[arg_count];
         String[] arg_constant = new String[arg_count];
 
-        for (int i = 0; i < arg_count; i++){
+        for (int i = 0; i < arg_count; i++) {
             arg[i] = v.getArg(i);
             Frame res = apply(arg[i]);
             arg_state[i] = res.state;
@@ -477,13 +499,13 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                 break;
             }
             case "android.os.Bundle": {
-                if (callee.getName().startsWith("get") && base_state != null && arg_constant[0] != null){
+                if (callee.getName().startsWith("get") && base_state != null && arg_constant[0] != null) {
                     base_state.bundle_elements.add(new BundleElement(callee.getReturnType(), arg_constant[0], frame.left_state));
                 }
                 break;
             }
             case "android.content.ContentValues": {
-                if (callee.getName().startsWith("get") && base_state != null && arg_constant[0] != null){
+                if (callee.getName().startsWith("get") && base_state != null && arg_constant[0] != null) {
                     base_state.cv_elements.add(new BundleElement(callee.getReturnType(), arg_constant[0], frame.left_state));
                 }
                 break;
@@ -525,7 +547,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                     case "<java.lang.String: int lastIndexOf(int)>":
                     case "<java.lang.String: int lastIndexOf(int,int)>":
                     case "<java.lang.String: int indexOf(int,int)>":
-                        if (IGNORE_INTS){
+                        if (IGNORE_INTS) {
                             break;
                         }
                     case "<java.lang.String: int indexOf(java.lang.String)>":
@@ -543,9 +565,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                         break;
                     case "<java.lang.String: char charAt(int)>":
                         if (!IGNORE_INTS && base_constant != null && arg_constant[0] != null) {
-                            try{
+                            try {
                                 constants.put(base, StringConstant.v(String.valueOf(base_constant.charAt(Integer.parseInt(arg_constant[0]))))); // TODO: char != string, but there is no charconst :/
-                            } catch (java.lang.StringIndexOutOfBoundsException e){
+                            } catch (java.lang.StringIndexOutOfBoundsException e) {
 
                             }
                         }
@@ -554,7 +576,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                         if (base_constant != null && arg_constant[0] != null) {
                             try {
                                 constants.put(base, StringConstant.v(base_constant.substring(Integer.parseInt(arg_constant[0]))));
-                            } catch (java.lang.StringIndexOutOfBoundsException e){
+                            } catch (java.lang.StringIndexOutOfBoundsException e) {
 
                             }
                         }
@@ -563,14 +585,14 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                         if (base_constant != null && arg_constant[0] != null && arg_constant[1] != null) {
                             try {
                                 constants.put(base, StringConstant.v(base_constant.substring(Integer.parseInt(arg_constant[0]), Integer.parseInt(arg_constant[1]))));
-                            } catch (java.lang.StringIndexOutOfBoundsException e){
+                            } catch (java.lang.StringIndexOutOfBoundsException e) {
 
                             }
                         }
                         break;
                     case "<java.lang.String: java.lang.String valueOf(long)>":
                     case "<java.lang.String: java.lang.String valueOf(int)>":
-                        if (IGNORE_INTS){
+                        if (IGNORE_INTS) {
                             break;
                         }
                     case "<java.lang.String: java.lang.String valueOf(java.lang.Object)>":
@@ -638,59 +660,59 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             case "android.util.Set":
             case "android.database.sqlite.SQLiteProgram":
                 // ignored
-            break;
+                break;
             default:
-            switch (signature) {
-                case "<android.os.Bundle: android.os.Parcelable getParcelable(java.lang.String)>":
-                    if (base_state != null && arg_constant[0] != null) {
-                        base_state.bundle_elements.add(new BundleElement(arg[0].getType(), arg_constant[0]));
-                    }
-                    break;
-                case "<java.lang.Integer: boolean equals(java.lang.Object)>":
-                    if (base_state != null && arg_constant[0] != null) {
-                        base_state.magic_equals.add(arg_constant[0]);
-                    } else if (arg_state[0] != null && base_constant != null) {
-                        arg_state[0].magic_equals.add(base_constant);
-                    }
-                    break;
-                case "<java.lang.Long: java.lang.Long valueOf(java.lang.String)>":
-                case "<java.lang.Long: long parseLong(java.lang.String)>": // longs are strings for us anyways ^^
-                case "<java.lang.Long: java.lang.Long valueOf(long)>":
-                case "<java.lang.Integer: int parseInt(java.lang.String)>":
-                case "<java.lang.Integer: java.lang.Integer valueOf(int)>":
-                case "<java.lang.Long: java.lang.String toString(long)>":
-                case "<java.lang.Float: java.lang.Float valueOf(float)>":
-                case "<java.lang.Integer: java.lang.String toString(int)>":
-                    if (IGNORE_INTS){
+                switch (signature) {
+                    case "<android.os.Bundle: android.os.Parcelable getParcelable(java.lang.String)>":
+                        if (base_state != null && arg_constant[0] != null) {
+                            base_state.bundle_elements.add(new BundleElement(arg[0].getType(), arg_constant[0]));
+                        }
                         break;
-                    }
-                    if (arg_constant[0] != null) {
-                        frame.constant = arg_constant[0];
-                    }
-                    break;
+                    case "<java.lang.Integer: boolean equals(java.lang.Object)>":
+                        if (base_state != null && arg_constant[0] != null) {
+                            base_state.magic_equals.add(arg_constant[0]);
+                        } else if (arg_state[0] != null && base_constant != null) {
+                            arg_state[0].magic_equals.add(base_constant);
+                        }
+                        break;
+                    case "<java.lang.Long: java.lang.Long valueOf(java.lang.String)>":
+                    case "<java.lang.Long: long parseLong(java.lang.String)>": // longs are strings for us anyways ^^
+                    case "<java.lang.Long: java.lang.Long valueOf(long)>":
+                    case "<java.lang.Integer: int parseInt(java.lang.String)>":
+                    case "<java.lang.Integer: java.lang.Integer valueOf(int)>":
+                    case "<java.lang.Long: java.lang.String toString(long)>":
+                    case "<java.lang.Float: java.lang.Float valueOf(float)>":
+                    case "<java.lang.Integer: java.lang.String toString(int)>":
+                        if (IGNORE_INTS) {
+                            break;
+                        }
+                        if (arg_constant[0] != null) {
+                            frame.constant = arg_constant[0];
+                        }
+                        break;
 
-                case "<java.lang.Long: java.lang.String toString()>":
-                case "<java.lang.Integer: int intValue()>":
-                case "<java.lang.Long: long longValue()>":
-                    if (IGNORE_INTS){
+                    case "<java.lang.Long: java.lang.String toString()>":
+                    case "<java.lang.Integer: int intValue()>":
+                    case "<java.lang.Long: long longValue()>":
+                        if (IGNORE_INTS) {
+                            break;
+                        }
+                    case "<java.lang.Object: java.lang.String toString()>":
+                        if (base_constant != null) {
+                            frame.constant = base_constant;
+                        }
                         break;
-                    }
-                case "<java.lang.Object: java.lang.String toString()>":
-                    if (base_constant != null) {
-                        frame.constant = base_constant;
-                    }
-                    break;
-                case "<android.content.ContentValues: void put(java.lang.String,java.lang.String)>":
-                case "<android.net.Uri: android.net.Uri$Builder buildUpon()>":
-                case "<android.net.Uri$Builder: android.net.Uri build()>":
-                case "<android.net.Uri: java.lang.String toString()>":
-                case "<android.net.Uri: java.lang.String getPath()>":
-                case "<android.net.Uri: java.lang.String getEncodedQuery()>":
-                case "<android.content.Context: int checkCallingUriPermission(android.net.Uri,int)>":
-                    break;
-                default:
-                    return false;
-            }
+                    case "<android.content.ContentValues: void put(java.lang.String,java.lang.String)>":
+                    case "<android.net.Uri: android.net.Uri$Builder buildUpon()>":
+                    case "<android.net.Uri$Builder: android.net.Uri build()>":
+                    case "<android.net.Uri: java.lang.String toString()>":
+                    case "<android.net.Uri: java.lang.String getPath()>":
+                    case "<android.net.Uri: java.lang.String getEncodedQuery()>":
+                    case "<android.content.Context: int checkCallingUriPermission(android.net.Uri,int)>":
+                        break;
+                    default:
+                        return false;
+                }
         }
         return true;
     }
@@ -698,7 +720,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     public void caseInvokeExpr(InvokeExpr v) {
         HashMap<Integer, Value> args_mapping = new HashMap<>();
         HashMap<Integer, Constant> constants_mapping = new HashMap<>();
-        if (v.toString().endsWith("<java.lang.RuntimeException: void <init>(java.lang.String)>(\"Stub!\")")){
+        if (v.toString().endsWith("<java.lang.RuntimeException: void <init>(java.lang.String)>(\"Stub!\")")) {
             missingImplementation(method.getSignature());
         }
         int i = 0;
@@ -707,14 +729,14 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                 args_mapping.put(i, arg);
             }
             Constant c = constants.getOrDefault(arg, null);
-            if (c != null){
+            if (c != null) {
                 constants_mapping.put(i, c);
             }
             i++;
         }
         State base_state = null;
 
-        if (v instanceof VirtualInvokeExpr){
+        if (v instanceof VirtualInvokeExpr) {
             base_state = lookupState(((VirtualInvokeExpr) v).getBase());
         }
         if (base_state != null || !args_mapping.isEmpty()) {
@@ -753,8 +775,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                         Frame res = apply(c);
                         frame.constant = res.constant;
                     }
-                }
-                catch (NoBodyException | LoopException | TooDeepException e){
+                } catch (NoBodyException | LoopException | TooDeepException e) {
                     System.err.println(e.getMessage());
                 }
             }
@@ -767,14 +788,13 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
 
-
     @Override
     public void caseStaticInvokeExpr(StaticInvokeExpr v) {
         caseInvokeExpr(v);
     }
 
     public String getString(Value arg) {
-        if (!arg.getType().toString().equals("java.lang.String")){
+        if (!arg.getType().toString().equals("java.lang.String")) {
             throw new RuntimeException("is not a string: " + arg.toString());
         }
         Frame result = apply(arg);
@@ -784,11 +804,11 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         throw new RuntimeException("failed to get StringArg: " + arg.toString());
     }
 
-    public String getStringArg(VirtualInvokeExpr v, int i){
+    public String getStringArg(VirtualInvokeExpr v, int i) {
         return getString(v.getArg(i));
     }
 
-    public void missingImplementation(String s){
+    public void missingImplementation(String s) {
         System.err.println("[warn] " + s);
     }
 
@@ -877,11 +897,15 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     @Override
     public void caseLocal(Local l) {
         Constant c = constants.getOrDefault(l, null);
-        if (c != null){
+        if (c != null) {
             Frame result = apply(c);
             //System.out.println("Constant resolved: " + l.getName() + " -> " + result.constant);
             frame.constant = result.constant;
         }
         frame.state = lookupState(l);
+    }
+
+    public Set<CallMethodAndArg> getCallMethodAndArgSet() {
+        return callMethodAndArgSet;
     }
 }

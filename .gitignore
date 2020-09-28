@@ -1,4 +1,15 @@
-.gradle/
-.idea/
-build/
-output/
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build
+
+# Soot
+sootOutput
+
+# Idea
+.idea
+
+# Extractor tool
+extractor/output
+extractor/*.json

@@ -1,3 +1,6 @@
-[submodule "android-platforms"]
-	path = android-platforms
+[submodule "extractor/android-platforms"]
+	path = extractor/android-platforms
 	url = https://github.com/Sable/android-platforms.git
+[submodule "cp-fuzzing-serialization"]
+	path = cp-fuzzing-serialization
+	url = git@projects.cispa.saarland:parthipan.ramesh/cp-fuzzing-serialization.git

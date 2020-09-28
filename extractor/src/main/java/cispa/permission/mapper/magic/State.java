@@ -27,6 +27,11 @@ public class State{
         this.method = m.getSignature();
     }
 
+    public String toJson() {
+
+        return null;
+    }
+
     public JSONObject toJSON(){
         JSONObject state_obj = new JSONObject();
         JSONObject param_obj = new JSONObject();

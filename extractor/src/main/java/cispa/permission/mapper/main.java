@@ -1,18 +1,14 @@
 package cispa.permission.mapper;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import cispa.permission.mapper.magic.AnalyzeRefs;
+import cispa.permission.mapper.model.CallMethodAndArg;
 import org.apache.commons.cli.*;
+import saarland.cispa.cp.fuzzing.serialization.FuzzingDataSerializer;
+import saarland.cispa.cp.fuzzing.serialization.ResolverCallUri;
 import soot.*;
-import soot.jimple.*;
-import soot.jimple.internal.*;
-
-import static cispa.permission.mapper.Utils.*;
 
 public class main {
 
@@ -20,7 +16,7 @@ public class main {
     private static final String DEXES_FOLDER = "./dex/";
     private static final String ANDROID_JARS = "./android-platforms/";
 
-
+    private static String outputPath;
 
     public static void main(String[] args) throws IOException {
         Options options = new Options();
@@ -53,7 +49,10 @@ public class main {
         try {
             cmd = parser.parse(options, args);
             AnalyzeRefs.IGNORE_INTS = cmd.getOptionValue("dont-ignore-ints") == null;
-            start(cmd.getOptionValue("output"), cmd.getOptionValue("soot"), cmd.getOptionValue("dexes"), cmd.getOptionValue("android"));
+
+            outputPath = cmd.getOptionValue("output");
+
+            start(outputPath, cmd.getOptionValue("soot"), cmd.getOptionValue("dexes"), cmd.getOptionValue("android"));
         } catch (ParseException e) {
             System.out.println(e.getMessage());
             formatter.printHelp("./magicextractor", options);
@@ -62,7 +61,7 @@ public class main {
 
     public static void start(String outfile, String output_folder, String dexes_folder, String android_jars) throws IOException {
         File dir = new File(dexes_folder);
-        File [] files = dir.listFiles((dir1, name) -> name.endsWith(".dex"));
+        File[] files = dir.listFiles((dir1, name) -> name.endsWith(".dex"));
 
         File f = new File(outfile);
         f.delete();
@@ -72,21 +71,15 @@ public class main {
         try {
             Utils.f = myWriter;
 
+            List<ResolverCallUri> results = new ArrayList<>();
+
             for (File file : files) {
                 System.out.println(file.getPath());
+
+                SootBodyTransformer bodyTransformer = new SootBodyTransformer();
+
                 Pack p = PackManager.v().getPack("jtp");
-                p.add(new Transform("jtp.myTransform", new BodyTransformer() {
-                    @Override
-                    protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
-                        SootMethod m = b.getMethod();
-                        SootClass superclass = m.getDeclaringClass();
-                        while (!superclass.getName().equals("android.content.ContentProvider") && superclass.hasSuperclass())
-                            superclass = superclass.getSuperclass();
-                        if (superclass.getName().equals("android.content.ContentProvider")) {
-                            analyzeMethod(m);
-                        }
-                    }
-                }));
+                p.add(new Transform("jtp.myTransform", bodyTransformer));
 
                 ArrayList<String> sootOptions = new ArrayList<>(Arrays.asList("-w",
                         "-allow-phantom-refs",
@@ -98,7 +91,7 @@ public class main {
                         "-keep-line-number",
                         "-process-multiple-dex"));
 
-                if (output_folder != null){
+                if (output_folder != null) {
                     sootOptions.add("-output-dir");
                     sootOptions.add(output_folder);
                 }
@@ -106,77 +99,59 @@ public class main {
                 try {
                     soot.Main.main(sootOptions.toArray(new String[0]));
                     G.reset();
+
+                    // Process results
+                    List<ResolverCallUri> appFormatResults = convertToAppFormat(bodyTransformer);
+                    results.addAll(appFormatResults);
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
-        }
-        finally {
+
+            String appOutput = outputPath.replace(".json", "") + ".app.json";
+            FuzzingDataSerializer.INSTANCE.serialize(appOutput, results);
+
+        } finally {
             myWriter.write("\n]");
             myWriter.flush();
             myWriter.close();
-
-        }
-
-    }
-
-
-
-    private static void analyzeMethod(SootMethod m) {
-        //System.out.println(m.getDeclaringClass().toString()+"."+m.getName().toString());
-        //callgraph.visit(m);
-        switch (m.getName()){
-            case "query":
-            case "insert":
-            case "update":
-            case "delete":
-            case "refresh":
-            case "call":
-                new AnalyzeRefs(m, 0).run();
-                break;
-            case "<clinit>":
-                analyzeClinit(m);
-                break;
-            default:
-                break;
         }
     }
 
+    private static List<ResolverCallUri> convertToAppFormat(SootBodyTransformer transformer) {
+        Set<String> uris = transformer.getProviderUris();
+        Set<CallMethodAndArg> callData = transformer.getCallMethodAndArgSet();
 
-    private static void analyzeClinit(SootMethod call) {
-        JimpleBody body = (JimpleBody) call.retrieveActiveBody();
-        UnitPatchingChain units = body.getUnits();
-        ArrayList<String> matches = new ArrayList<>();
-        for (Unit bx : units){
-            Stmt s = (Stmt) bx;
-            if (s instanceof JInvokeStmt) {
-                InvokeExpr invoke = s.getInvokeExpr();
-                if(invoke.getMethod().getName().equals("addURI") && invoke.getMethod().getDeclaringClass().getName().equals("android.content.UriMatcher")){
-                    String uri;
-                    try {
-                        String arg0 = immediateString(invoke.getArgBox(0));
-                        uri = "content://" + arg0 + "/";
-                    } catch (IllegalArgumentException e){
-                        uri = "content://" + "???" + "/";
-                    }
-                    try {
-                        String arg1 = immediateString(invoke.getArgBox(1));
-                        if (arg1 != null){
-                            uri += arg1;
+        List<ResolverCallUri> result = new ArrayList<>();
+        for (CallMethodAndArg data : callData) {
+            if (data.getMethodMagicEquals().isEmpty()) {
+                for (String u : uris) {
+                    ResolverCallUri callUri = new ResolverCallUri(u, null, null, null);
+                    result.add(callUri);
+                }
+            } else {
+
+                for (String methodMagicEqual : data.getMethodMagicEquals()) {
+                    if (data.getArgMagicEquals().isEmpty()) {
+                        for (String u : uris) {
+                            ResolverCallUri callUri = new ResolverCallUri(u, methodMagicEqual, null, null);
+                            result.add(callUri);
                         }
-                    } catch (IllegalArgumentException e){
-                        uri += "???";
+                    } else {
+
+                        for (String argMagicEqual : data.getArgMagicEquals()) {
+                            for (String u : uris) {
+                                ResolverCallUri callUri = new ResolverCallUri(u, methodMagicEqual, argMagicEqual, null);
+                                result.add(callUri);
+                            }
+                        }
                     }
-                    matches.add(uri);
+
                 }
             }
-
-
         }
-        result(call, matches, "UriMatcher", "");
+
+        return result;
     }
-
-
-
-
 }
