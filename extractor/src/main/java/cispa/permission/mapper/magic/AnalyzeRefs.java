@@ -136,6 +136,10 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             final State secondArg = states.get(1);
 
             if (numberOfArgs == 3) { // ContentProvider.call(..) with uri
+                if (!firstArg.cv_elements.isEmpty() || !secondArg.cv_elements.isEmpty()) {
+                    throw new IllegalStateException("ingore case: " + firstArg.toString() + "\n" + secondArg.toString());
+                }
+
                 CallMethodAndArg callData = new CallMethodAndArg(firstArg.magic_equals, secondArg.magic_equals);
                 callMethodAndArgSet.add(callData);
 

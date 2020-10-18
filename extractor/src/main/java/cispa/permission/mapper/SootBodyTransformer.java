@@ -18,6 +18,7 @@ public class SootBodyTransformer extends BodyTransformer {
     private final Set<String> providerUris;
     private final Set<CallMethodAndArg> callMethodAndArgSet;
 
+    private String authorityName;
 
     public SootBodyTransformer() {
         providerUris = new HashSet<>();
@@ -71,6 +72,10 @@ public class SootBodyTransformer extends BodyTransformer {
                     try {
                         String arg0 = immediateString(invoke.getArgBox(0));
                         uri = "content://" + arg0 + "/";
+
+                        if (authorityName == null) {
+                            authorityName = uri;
+                        }
                     } catch (IllegalArgumentException e) {
                         uri = "content://" + "???" + "/";
                     }
@@ -95,6 +100,10 @@ public class SootBodyTransformer extends BodyTransformer {
 
     public Set<String> getProviderUris() {
         return providerUris;
+    }
+
+    public String getAuthorityName() {
+        return authorityName;
     }
 
     public Set<CallMethodAndArg> getCallMethodAndArgSet() {

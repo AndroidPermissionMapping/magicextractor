@@ -120,34 +120,26 @@ public class main {
     }
 
     private static List<ResolverCallUri> convertToAppFormat(SootBodyTransformer transformer) {
-        Set<String> uris = transformer.getProviderUris();
+        final String authorityName = transformer.getAuthorityName();
         Set<CallMethodAndArg> callData = transformer.getCallMethodAndArgSet();
 
         List<ResolverCallUri> result = new ArrayList<>();
         for (CallMethodAndArg data : callData) {
             if (data.getMethodMagicEquals().isEmpty()) {
-                for (String u : uris) {
-                    ResolverCallUri callUri = new ResolverCallUri(u, null, null, null);
-                    result.add(callUri);
-                }
+                ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
+                result.add(callUri);
             } else {
 
                 for (String methodMagicEqual : data.getMethodMagicEquals()) {
                     if (data.getArgMagicEquals().isEmpty()) {
-                        for (String u : uris) {
-                            ResolverCallUri callUri = new ResolverCallUri(u, methodMagicEqual, null, null);
+                        ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
+                        result.add(callUri);
+                    } else {
+                        for (String argMagicEqual : data.getArgMagicEquals()) {
+                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
                             result.add(callUri);
                         }
-                    } else {
-
-                        for (String argMagicEqual : data.getArgMagicEquals()) {
-                            for (String u : uris) {
-                                ResolverCallUri callUri = new ResolverCallUri(u, methodMagicEqual, argMagicEqual, null);
-                                result.add(callUri);
-                            }
-                        }
                     }
-
                 }
             }
         }
