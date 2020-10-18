@@ -10,7 +10,7 @@ import saarland.cispa.cp.fuzzing.serialization.FuzzingDataSerializer;
 import saarland.cispa.cp.fuzzing.serialization.ResolverCallUri;
 import soot.*;
 
-public class main {
+public class Main {
 
     private static final String OUTPUT = "./output/";
     private static final String DEXES_FOLDER = "./dex/";
@@ -19,44 +19,11 @@ public class main {
     private static String outputPath;
 
     public static void main(String[] args) throws IOException {
-        Options options = new Options();
+        CommandLine cmd = new CLIParser().parse(args);
 
-        Option opt_output = new Option("o", "output", true, "output file path (required)");
-        opt_output.setRequired(true);
-        options.addOption(opt_output);
-
-        Option opt_soot = new Option("s", "soot", true, "soot output folder");
-        opt_soot.setRequired(false);
-        options.addOption(opt_soot);
-
-        Option opt_dexes = new Option("d", "dexes", true, "dexes folder (required)");
-        opt_dexes.setRequired(true);
-        options.addOption(opt_dexes);
-
-
-        Option opt_jars = new Option("a", "android", true, "android jars folder (required)");
-        opt_jars.setRequired(true);
-        options.addOption(opt_jars);
-
-        Option opt_ints = new Option("i", "dont-ignore-ints", false, "Don't ignore ints in analysis");
-        opt_ints.setRequired(false);
-        options.addOption(opt_ints);
-
-        CommandLineParser parser = new DefaultParser();
-        HelpFormatter formatter = new HelpFormatter();
-        CommandLine cmd;
-
-        try {
-            cmd = parser.parse(options, args);
-            AnalyzeRefs.IGNORE_INTS = cmd.getOptionValue("dont-ignore-ints") == null;
-
-            outputPath = cmd.getOptionValue("output");
-
-            start(outputPath, cmd.getOptionValue("soot"), cmd.getOptionValue("dexes"), cmd.getOptionValue("android"));
-        } catch (ParseException e) {
-            System.out.println(e.getMessage());
-            formatter.printHelp("./magicextractor", options);
-        }
+        AnalyzeRefs.IGNORE_INTS = cmd.getOptionValue("dont-ignore-ints") == null;
+        outputPath = cmd.getOptionValue("output");
+        start(outputPath, cmd.getOptionValue("soot"), cmd.getOptionValue("dexes"), cmd.getOptionValue("android"));
     }
 
     public static void start(String outfile, String output_folder, String dexes_folder, String android_jars) throws IOException {
