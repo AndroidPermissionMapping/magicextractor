@@ -1,4 +1,4 @@
-package cispa.permission.mapper;
+package cispa.permission.mapper.soot;
 
 import cispa.permission.mapper.magic.AnalyzeRefs;
 import cispa.permission.mapper.model.CallMethodAndArg;

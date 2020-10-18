@@ -1,5 +1,6 @@
-package cispa.permission.mapper;
+package cispa.permission.mapper.soot;
 
+import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.magic.BundleElement;
 import cispa.permission.mapper.magic.State;
 import org.json.JSONArray;

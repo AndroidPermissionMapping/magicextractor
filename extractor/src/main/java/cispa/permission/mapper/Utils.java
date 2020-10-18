@@ -15,7 +15,7 @@ import java.util.ArrayList;
 
 public class Utils {
 
-    static BufferedWriter f = null;
+    public static BufferedWriter f = null;
     static boolean first = true;
     static final Integer x = 0;
 
