@@ -16,6 +16,7 @@ import static cispa.permission.mapper.Utils.result;
 
 public class SootBodyTransformer extends BodyTransformer {
 
+    private final String dexFileName;
     private final Statistics statistics;
 
     private final Set<String> providerUris;
@@ -23,7 +24,8 @@ public class SootBodyTransformer extends BodyTransformer {
 
     private String authorityName;
 
-    public SootBodyTransformer(Statistics statistics) {
+    public SootBodyTransformer(String dexFileName, Statistics statistics) {
+        this.dexFileName = dexFileName;
         this.statistics = statistics;
         providerUris = new HashSet<>();
         callMethodAndArgSet = new HashSet<>();
@@ -38,7 +40,7 @@ public class SootBodyTransformer extends BodyTransformer {
 
         if (superclass.getName().equals("android.content.ContentProvider")) {
             String contentProviderClassName = m.getDeclaringClass().toString();
-            statistics.reportContentProvider(contentProviderClassName);
+            statistics.reportContentProvider(dexFileName + ": " + contentProviderClassName);
 
             analyzeMethod(m);
         }

@@ -68,7 +68,7 @@ public class SootAnalysis {
             sootOptions.set_output_dir(outputFolderPath);
         }
 
-        SootBodyTransformer bodyTransformer = new SootBodyTransformer(statistics);
+        SootBodyTransformer bodyTransformer = new SootBodyTransformer(filePath, statistics);
 
         Pack p = PackManager.v().getPack("jtp");
         p.add(new Transform("jtp.myTransform", bodyTransformer));
