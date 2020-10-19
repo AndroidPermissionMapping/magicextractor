@@ -1,6 +1,7 @@
 package cispa.permission.mapper.magic;
 
 import cispa.permission.mapper.RandomStringGenerator;
+import cispa.permission.mapper.Statistics;
 import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.model.CallMethodAndArg;
 import org.json.JSONArray;
@@ -32,6 +33,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     private final Set<CallMethodAndArg> callMethodAndArgSet = new HashSet<>();
 
     private final RandomStringGenerator randomStringGenerator = new RandomStringGenerator();
+    private final Statistics statistics;
 
     public class NoBodyException extends RuntimeException {
 
@@ -57,7 +59,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
     }
 
-    public AnalyzeRefs(SootMethod m, int depth, AnalyzeRefs parent) {
+    public AnalyzeRefs(Statistics statistics, SootMethod m, int depth, AnalyzeRefs parent) {
+        this.statistics = statistics;
+
         this.parent = parent;
         this.depth = depth;
         method = m;
@@ -93,7 +97,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
 
-    public AnalyzeRefs(SootMethod m, int depth) {
+    public AnalyzeRefs(Statistics statistics, SootMethod m, int depth) {
+        this.statistics = statistics;
+
         System.out.println("[" + depth + "] Created Analyzer for Method " + m.getSignature());
         if (depth > max_depth) {
             throw new TooDeepException(m);
@@ -143,6 +149,8 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             final State secondArg = states.get(1);
 
             if (numberOfArgs == 3) { // ContentProvider.call(..) with uri
+                statistics.reportCallMethod(method.toString());
+
                 Set<String> methodMagicValues = new HashSet<>(firstArg.magic_equals);
                 randomStringGenerator
                         .generateStreamForMagicSubstrings(firstArg.magic_substring)
@@ -759,7 +767,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         if (base_state != null || !args_mapping.isEmpty()) {
             if (!InvokeHook(v)) {
                 try {
-                    AnalyzeRefs callee_analyzer = new AnalyzeRefs(v.getMethod(), depth + 1, this);
+                    AnalyzeRefs callee_analyzer = new AnalyzeRefs(statistics, v.getMethod(), depth + 1, this);
                     i = 0;
                     for (Local l : callee_analyzer.body.getParameterLocals()) {
                         Constant c = constants_mapping.getOrDefault(i++, null);

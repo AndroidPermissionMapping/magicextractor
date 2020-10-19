@@ -1,5 +1,6 @@
 package cispa.permission.mapper.soot;
 
+import cispa.permission.mapper.Statistics;
 import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.model.CallMethodAndArg;
 import saarland.cispa.cp.fuzzing.serialization.FuzzingDataSerializer;
@@ -22,9 +23,11 @@ import java.util.stream.Collectors;
 
 public class SootAnalysis {
     private final AnalysisParameters parameters;
+    private final Statistics statistics;
 
     public SootAnalysis(AnalysisParameters parameters) {
         this.parameters = parameters;
+        statistics = new Statistics();
     }
 
     private static BufferedWriter prepare(String resultsFile) throws IOException {
@@ -65,7 +68,7 @@ public class SootAnalysis {
             sootOptions.set_output_dir(outputFolderPath);
         }
 
-        SootBodyTransformer bodyTransformer = new SootBodyTransformer();
+        SootBodyTransformer bodyTransformer = new SootBodyTransformer(statistics);
 
         Pack p = PackManager.v().getPack("jtp");
         p.add(new Transform("jtp.myTransform", bodyTransformer));
@@ -88,9 +91,7 @@ public class SootAnalysis {
         String resultsFile = parameters.getResultsFilePath();
         BufferedWriter myWriter = prepare(resultsFile);
         try {
-
             List<ResolverCallUri> results = new ArrayList<>();
-
             for (String filename : dexFileNames) {
                 System.out.println(filename);
 
@@ -101,6 +102,8 @@ public class SootAnalysis {
                 List<ResolverCallUri> appFormatResults = convertToAppFormat(bodyTransformer);
                 results.addAll(appFormatResults);
             }
+
+            statistics.print(false);
 
             String appOutput = resultsFile.replace(".json", "") + ".app.json";
             FuzzingDataSerializer.INSTANCE.serialize(appOutput, results);

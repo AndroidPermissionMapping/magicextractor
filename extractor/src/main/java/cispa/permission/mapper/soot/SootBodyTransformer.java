@@ -1,5 +1,6 @@
 package cispa.permission.mapper.soot;
 
+import cispa.permission.mapper.Statistics;
 import cispa.permission.mapper.magic.AnalyzeRefs;
 import cispa.permission.mapper.model.CallMethodAndArg;
 import soot.*;
@@ -15,12 +16,15 @@ import static cispa.permission.mapper.Utils.result;
 
 public class SootBodyTransformer extends BodyTransformer {
 
+    private final Statistics statistics;
+
     private final Set<String> providerUris;
     private final Set<CallMethodAndArg> callMethodAndArgSet;
 
     private String authorityName;
 
-    public SootBodyTransformer() {
+    public SootBodyTransformer(Statistics statistics) {
+        this.statistics = statistics;
         providerUris = new HashSet<>();
         callMethodAndArgSet = new HashSet<>();
     }
@@ -33,6 +37,9 @@ public class SootBodyTransformer extends BodyTransformer {
             superclass = superclass.getSuperclass();
 
         if (superclass.getName().equals("android.content.ContentProvider")) {
+            String contentProviderClassName = m.getDeclaringClass().toString();
+            statistics.reportContentProvider(contentProviderClassName);
+
             analyzeMethod(m);
         }
     }
@@ -47,7 +54,7 @@ public class SootBodyTransformer extends BodyTransformer {
             case "delete":
             case "refresh":
             case "call":
-                AnalyzeRefs analyzeRefs = new AnalyzeRefs(m, 0);
+                AnalyzeRefs analyzeRefs = new AnalyzeRefs(statistics, m, 0);
                 analyzeRefs.run();
 
                 Set<CallMethodAndArg> callData = analyzeRefs.getCallMethodAndArgSet();
