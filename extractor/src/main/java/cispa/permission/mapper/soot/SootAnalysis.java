@@ -120,22 +120,27 @@ public class SootAnalysis {
 
         List<ResolverCallUri> result = new ArrayList<>();
         for (CallMethodAndArg data : callData) {
-            if (data.getMethodMagicEquals().isEmpty()) {
-                ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
-                result.add(callUri);
-            } else {
 
-                for (String methodMagicEqual : data.getMethodMagicEquals()) {
-                    if (data.getArgMagicEquals().isEmpty()) {
-                        ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
-                        result.add(callUri);
-                    } else {
-                        for (String argMagicEqual : data.getArgMagicEquals()) {
-                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
+            try {
+                if (data.getMethodMagicEquals().isEmpty()) {
+                    ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
+                    result.add(callUri);
+                } else {
+
+                    for (String methodMagicEqual : data.getMethodMagicEquals()) {
+                        if (data.getArgMagicEquals().isEmpty()) {
+                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
                             result.add(callUri);
+                        } else {
+                            for (String argMagicEqual : data.getArgMagicEquals()) {
+                                ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
+                                result.add(callUri);
+                            }
                         }
                     }
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
 

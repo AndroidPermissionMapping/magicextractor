@@ -1,12 +1,17 @@
 package cispa.permission.mapper.magic;
 
+import cispa.permission.mapper.RandomStringGenerator;
 import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.model.CallMethodAndArg;
 import org.json.JSONArray;
-import soot.*;
+import soot.Local;
+import soot.SootMethod;
+import soot.Unit;
+import soot.Value;
 import soot.jimple.*;
 import soot.util.ArraySet;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
@@ -25,6 +30,8 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     public static boolean IGNORE_INTS = false;
 
     private final Set<CallMethodAndArg> callMethodAndArgSet = new HashSet<>();
+
+    private final RandomStringGenerator randomStringGenerator = new RandomStringGenerator();
 
     public class NoBodyException extends RuntimeException {
 
@@ -136,11 +143,17 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             final State secondArg = states.get(1);
 
             if (numberOfArgs == 3) { // ContentProvider.call(..) with uri
-                if (!firstArg.cv_elements.isEmpty() || !secondArg.cv_elements.isEmpty()) {
-                    throw new IllegalStateException("ingore case: " + firstArg.toString() + "\n" + secondArg.toString());
-                }
+                Set<String> methodMagicValues = new HashSet<>(firstArg.magic_equals);
+                randomStringGenerator
+                        .generateStreamForMagicSubstrings(firstArg.magic_substring)
+                        .forEach(methodMagicValues::add);
 
-                CallMethodAndArg callData = new CallMethodAndArg(firstArg.magic_equals, secondArg.magic_equals);
+                Set<String> argMagicValues = new HashSet<>(secondArg.magic_equals);
+                randomStringGenerator
+                        .generateStreamForMagicSubstrings(secondArg.magic_substring)
+                        .forEach(argMagicValues::add);
+
+                CallMethodAndArg callData = new CallMethodAndArg(methodMagicValues, argMagicValues);
                 callMethodAndArgSet.add(callData);
 
             } else if (numberOfArgs == 4) { // ContentProvider.call(..) with authority - API 29+
