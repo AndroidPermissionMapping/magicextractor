@@ -3,6 +3,8 @@ package cispa.permission.mapper.soot;
 import cispa.permission.mapper.Statistics;
 import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.model.CallMethodAndArg;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import saarland.cispa.cp.fuzzing.serialization.FuzzingDataSerializer;
 import saarland.cispa.cp.fuzzing.serialization.ResolverCallUri;
 import soot.G;
@@ -15,13 +17,12 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class SootAnalysis {
+    private static final Logger logger = LoggerFactory.getLogger(SootAnalysis.class);
+
     private final AnalysisParameters parameters;
     private final Statistics statistics;
 
@@ -54,7 +55,6 @@ public class SootAnalysis {
         sootOptions.set_allow_phantom_refs(true);
         sootOptions.set_android_jars(parameters.getAndroidJarsFolderPath());
         sootOptions.set_src_prec(Options.src_prec_apk);
-        sootOptions.set_process_multiple_dex(true);
 
         // Input
         List<String> processDirs = new ArrayList<>();
@@ -96,7 +96,7 @@ public class SootAnalysis {
                 System.out.println(filename);
 
                 SootBodyTransformer bodyTransformer = setupSoot(filename);
-                soot.Main.main(new String[]{"-w"}); // need to pass String[] (bug in soot)
+                soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
 
                 // Process results
                 List<ResolverCallUri> appFormatResults = convertToAppFormat(bodyTransformer);
@@ -108,8 +108,6 @@ public class SootAnalysis {
             String appOutput = resultsFile.replace(".json", "") + ".app.json";
             FuzzingDataSerializer.INSTANCE.serialize(appOutput, results);
 
-        } catch (Exception e) {
-            e.printStackTrace();
         } finally {
             myWriter.write("\n]");
             myWriter.flush();
@@ -121,29 +119,31 @@ public class SootAnalysis {
         final String authorityName = transformer.getAuthorityName();
         Set<CallMethodAndArg> callData = transformer.getCallMethodAndArgSet();
 
+        if (authorityName == null && !callData.isEmpty()) {
+            String dexFileName = transformer.getDexFileName();
+            logger.error(dexFileName + ": Magic values found but no authority name! " +
+                    "Magic values: " + callData.toString());
+            return Collections.emptyList();
+        }
+
         List<ResolverCallUri> result = new ArrayList<>();
         for (CallMethodAndArg data : callData) {
+            if (data.getMethodMagicEquals().isEmpty()) {
+                ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
+                result.add(callUri);
+            } else {
 
-            try {
-                if (data.getMethodMagicEquals().isEmpty()) {
-                    ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
-                    result.add(callUri);
-                } else {
-
-                    for (String methodMagicEqual : data.getMethodMagicEquals()) {
-                        if (data.getArgMagicEquals().isEmpty()) {
-                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
+                for (String methodMagicEqual : data.getMethodMagicEquals()) {
+                    if (data.getArgMagicEquals().isEmpty()) {
+                        ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
+                        result.add(callUri);
+                    } else {
+                        for (String argMagicEqual : data.getArgMagicEquals()) {
+                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
                             result.add(callUri);
-                        } else {
-                            for (String argMagicEqual : data.getArgMagicEquals()) {
-                                ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
-                                result.add(callUri);
-                            }
                         }
                     }
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
             }
         }
 

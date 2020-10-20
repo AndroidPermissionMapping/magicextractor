@@ -33,4 +33,12 @@ public class CallMethodAndArg {
     public int hashCode() {
         return Objects.hash(methodMagicEquals, argMagicEquals);
     }
+
+    @Override
+    public String toString() {
+        return "CallMethodAndArg{" +
+                "methodMagicEquals=" + methodMagicEquals +
+                ", argMagicEquals=" + argMagicEquals +
+                '}';
+    }
 }

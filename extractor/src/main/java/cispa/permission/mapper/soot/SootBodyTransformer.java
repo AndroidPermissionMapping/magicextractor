@@ -118,4 +118,8 @@ public class SootBodyTransformer extends BodyTransformer {
     public Set<CallMethodAndArg> getCallMethodAndArgSet() {
         return callMethodAndArgSet;
     }
+
+    public String getDexFileName() {
+        return dexFileName;
+    }
 }
