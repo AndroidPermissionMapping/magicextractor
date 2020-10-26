@@ -1,34 +1,41 @@
 package cispa.permission.mapper.soot;
 
 import cispa.permission.mapper.Statistics;
+import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.magic.AnalyzeRefs;
-import cispa.permission.mapper.model.CallMethodAndArg;
+import cispa.permission.mapper.model.FoundMagicValues;
 import soot.*;
 import soot.jimple.InvokeExpr;
 import soot.jimple.JimpleBody;
 import soot.jimple.Stmt;
 import soot.jimple.internal.JInvokeStmt;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 import static cispa.permission.mapper.Utils.immediateString;
 import static cispa.permission.mapper.Utils.result;
 
 public class SootBodyTransformer extends BodyTransformer {
 
+    private final FuzzingGenerator fuzzingGenerator;
+
     private final String dexFileName;
     private final Statistics statistics;
 
-    private final Set<String> providerUris;
-    private final Set<CallMethodAndArg> callMethodAndArgSet;
+    private final Set<String> providerUriMatchers;
+    private final Set<FoundMagicValues> foundMagicValues;
 
     private String authorityName;
 
-    public SootBodyTransformer(String dexFileName, Statistics statistics) {
+    public SootBodyTransformer(String dexFileName, FuzzingGenerator fuzzingGenerator, Statistics statistics) {
         this.dexFileName = dexFileName;
+        this.fuzzingGenerator = fuzzingGenerator;
         this.statistics = statistics;
-        providerUris = new HashSet<>();
-        callMethodAndArgSet = new HashSet<>();
+        providerUriMatchers = new HashSet<>();
+        foundMagicValues = new HashSet<>();
     }
 
     @Override
@@ -56,11 +63,11 @@ public class SootBodyTransformer extends BodyTransformer {
             case "delete":
             case "refresh":
             case "call":
-                AnalyzeRefs analyzeRefs = new AnalyzeRefs(statistics, m, 0);
+                AnalyzeRefs analyzeRefs = new AnalyzeRefs(fuzzingGenerator, statistics, m, 0);
                 analyzeRefs.run();
 
-                Set<CallMethodAndArg> callData = analyzeRefs.getCallMethodAndArgSet();
-                callMethodAndArgSet.addAll(callData);
+                Set<FoundMagicValues> magicValues = analyzeRefs.getFoundMagicValues();
+                foundMagicValues.addAll(magicValues);
             case "<clinit>":
                 analyzeClinit(m);
             default:
@@ -104,19 +111,19 @@ public class SootBodyTransformer extends BodyTransformer {
         }
         result(call, matches, "UriMatcher", "");
 
-        providerUris.addAll(matches);
+        providerUriMatchers.addAll(matches);
     }
 
-    public Set<String> getProviderUris() {
-        return providerUris;
+    public Set<String> getProviderUriMatchers() {
+        return providerUriMatchers;
     }
 
     public String getAuthorityName() {
         return authorityName;
     }
 
-    public Set<CallMethodAndArg> getCallMethodAndArgSet() {
-        return callMethodAndArgSet;
+    public Set<FoundMagicValues> getFoundMagicValues() {
+        return foundMagicValues;
     }
 
     public String getDexFileName() {

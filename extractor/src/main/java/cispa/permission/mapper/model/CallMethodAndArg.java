@@ -3,7 +3,7 @@ package cispa.permission.mapper.model;
 import java.util.Objects;
 import java.util.Set;
 
-public class CallMethodAndArg {
+public class CallMethodAndArg implements FoundMagicValues {
     private final Set<String> methodMagicEquals;
     private final Set<String> argMagicEquals;
 

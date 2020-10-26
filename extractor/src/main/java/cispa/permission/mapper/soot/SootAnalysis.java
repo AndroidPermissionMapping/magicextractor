@@ -2,9 +2,14 @@ package cispa.permission.mapper.soot;
 
 import cispa.permission.mapper.Statistics;
 import cispa.permission.mapper.Utils;
+import cispa.permission.mapper.fuzzer.AppFormatConverter;
+import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.model.CallMethodAndArg;
+import cispa.permission.mapper.model.ContentProviderQuery;
+import cispa.permission.mapper.model.FoundMagicValues;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import saarland.cispa.cp.fuzzing.serialization.FuzzingData;
 import saarland.cispa.cp.fuzzing.serialization.FuzzingDataSerializer;
 import saarland.cispa.cp.fuzzing.serialization.ResolverCallUri;
 import soot.G;
@@ -24,10 +29,12 @@ public class SootAnalysis {
     private static final Logger logger = LoggerFactory.getLogger(SootAnalysis.class);
 
     private final AnalysisParameters parameters;
+    private final FuzzingGenerator fuzzingGenerator;
     private final Statistics statistics;
 
     public SootAnalysis(AnalysisParameters parameters) {
         this.parameters = parameters;
+        fuzzingGenerator = new FuzzingGenerator();
         statistics = new Statistics();
     }
 
@@ -68,7 +75,7 @@ public class SootAnalysis {
             sootOptions.set_output_dir(outputFolderPath);
         }
 
-        SootBodyTransformer bodyTransformer = new SootBodyTransformer(filePath, statistics);
+        SootBodyTransformer bodyTransformer = new SootBodyTransformer(filePath, fuzzingGenerator, statistics);
 
         Pack p = PackManager.v().getPack("jtp");
         p.add(new Transform("jtp.myTransform", bodyTransformer));
@@ -91,7 +98,7 @@ public class SootAnalysis {
         String resultsFile = parameters.getResultsFilePath();
         BufferedWriter myWriter = prepare(resultsFile);
         try {
-            List<ResolverCallUri> results = new ArrayList<>();
+            List<FuzzingData> results = new ArrayList<>();
             for (String filename : dexFileNames) {
                 System.out.println(filename);
 
@@ -99,7 +106,7 @@ public class SootAnalysis {
                 soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
 
                 // Process results
-                List<ResolverCallUri> appFormatResults = convertToAppFormat(bodyTransformer);
+                List<FuzzingData> appFormatResults = convertToAppFormat(bodyTransformer);
                 results.addAll(appFormatResults);
             }
 
@@ -115,32 +122,67 @@ public class SootAnalysis {
         }
     }
 
-    private static List<ResolverCallUri> convertToAppFormat(SootBodyTransformer transformer) {
+    private List<FuzzingData> convertToAppFormat(SootBodyTransformer transformer) {
         final String authorityName = transformer.getAuthorityName();
-        Set<CallMethodAndArg> callData = transformer.getCallMethodAndArgSet();
+        Set<FoundMagicValues> foundMagicValues = transformer.getFoundMagicValues();
 
-        if (authorityName == null && !callData.isEmpty()) {
+        if (authorityName == null && !foundMagicValues.isEmpty()) {
             String dexFileName = transformer.getDexFileName();
             logger.error(dexFileName + ": Magic values found but no authority name! " +
-                    "Magic values: " + callData.toString());
+                    "Magic values: " + foundMagicValues.toString());
             return Collections.emptyList();
         }
 
-        List<ResolverCallUri> result = new ArrayList<>();
-        for (CallMethodAndArg data : callData) {
-            if (data.getMethodMagicEquals().isEmpty()) {
-                ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
-                result.add(callUri);
-            } else {
+        final Set<String> providerUriMatchers = transformer.getProviderUriMatchers();
+        final Set<String> providerUris = fuzzingGenerator.generateUriFromMatchers(providerUriMatchers);
 
-                for (String methodMagicEqual : data.getMethodMagicEquals()) {
-                    if (data.getArgMagicEquals().isEmpty()) {
-                        ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
-                        result.add(callUri);
-                    } else {
-                        for (String argMagicEqual : data.getArgMagicEquals()) {
-                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
+        List<FuzzingData> result = new ArrayList<>();
+        for (FoundMagicValues magicValues : foundMagicValues) {
+            if (magicValues instanceof ContentProviderQuery) {
+                ContentProviderQuery data = (ContentProviderQuery) magicValues;
+                List<Set<String>> args = data.getArgs();
+
+                if (data.isApi1Implementation()) {
+                    for (String uri : providerUris) {
+                        Set<String> projections = args.get(0);
+
+                        if (projections.isEmpty()) {
+                            Set<String> selections = args.get(1);
+                            Set<String> selectionArgs = args.get(2);
+                            Set<String> sortOrders = args.get(3);
+
+                            if (selections.isEmpty()) {
+                                AppFormatConverter
+                                        .processSelectionArgs(result, uri, null, selectionArgs, sortOrders);
+
+                            } else {
+                                selections.forEach(selection -> AppFormatConverter
+                                        .processSelectionArgs(result, uri, selection, selectionArgs, sortOrders));
+                            }
+                        } else {
+                            throw new IllegalStateException("Not implemented");
+                        }
+                    }
+                }
+
+            }
+
+            if (magicValues instanceof CallMethodAndArg) {
+                CallMethodAndArg data = (CallMethodAndArg) magicValues;
+                if (data.getMethodMagicEquals().isEmpty()) {
+                    ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
+                    result.add(callUri);
+                } else {
+
+                    for (String methodMagicEqual : data.getMethodMagicEquals()) {
+                        if (data.getArgMagicEquals().isEmpty()) {
+                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
                             result.add(callUri);
+                        } else {
+                            for (String argMagicEqual : data.getArgMagicEquals()) {
+                                ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
+                                result.add(callUri);
+                            }
                         }
                     }
                 }

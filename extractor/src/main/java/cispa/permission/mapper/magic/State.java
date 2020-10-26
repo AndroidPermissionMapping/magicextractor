@@ -136,4 +136,23 @@ public class State{
             state.children.add(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return "State{" +
+                "local=" + local +
+                ", method='" + method + '\'' +
+                ", children=" + children +
+                ", passed_to=" + passed_to +
+                ", query_parameters=" + query_parameters +
+                ", magic_equals=" + magic_equals +
+                ", magic_split=" + magic_split +
+                ", magic_equals_ignorecase=" + magic_equals_ignorecase +
+                ", magic_substring=" + magic_substring +
+                ", magic_regex=" + magic_regex +
+                ", bundle_elements=" + bundle_elements +
+                ", cv_elements=" + cv_elements +
+                ", eaten=" + eaten +
+                '}';
+    }
 }

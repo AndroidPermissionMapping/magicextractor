@@ -1,10 +1,14 @@
 package cispa.permission.mapper.magic;
 
-import cispa.permission.mapper.RandomStringGenerator;
+import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.Statistics;
 import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.model.CallMethodAndArg;
+import cispa.permission.mapper.model.ContentProviderQuery;
+import cispa.permission.mapper.model.FoundMagicValues;
 import org.json.JSONArray;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import soot.Local;
 import soot.SootMethod;
 import soot.Unit;
@@ -12,10 +16,12 @@ import soot.Value;
 import soot.jimple.*;
 import soot.util.ArraySet;
 
-import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
+
+    private static final Logger logger = LoggerFactory.getLogger(AnalyzeRefs.class);
 
     private final int max_depth = 20;
     private final int depth;
@@ -30,9 +36,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     private Value ret;
     public static boolean IGNORE_INTS = false;
 
-    private final Set<CallMethodAndArg> callMethodAndArgSet = new HashSet<>();
+    private final Set<FoundMagicValues> foundMagicValues = new HashSet<>();
 
-    private final RandomStringGenerator randomStringGenerator = new RandomStringGenerator();
+    private final FuzzingGenerator fuzzingGenerator;
     private final Statistics statistics;
 
     public class NoBodyException extends RuntimeException {
@@ -59,7 +65,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
     }
 
-    public AnalyzeRefs(Statistics statistics, SootMethod m, int depth, AnalyzeRefs parent) {
+    public AnalyzeRefs(FuzzingGenerator fuzzingGenerator, Statistics statistics, SootMethod m, int depth,
+                       AnalyzeRefs parent) {
+        this.fuzzingGenerator = fuzzingGenerator;
         this.statistics = statistics;
 
         this.parent = parent;
@@ -97,7 +105,8 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
 
-    public AnalyzeRefs(Statistics statistics, SootMethod m, int depth) {
+    public AnalyzeRefs(FuzzingGenerator fuzzingGenerator, Statistics statistics, SootMethod m, int depth) {
+        this.fuzzingGenerator = fuzzingGenerator;
         this.statistics = statistics;
 
         System.out.println("[" + depth + "] Created Analyzer for Method " + m.getSignature());
@@ -142,8 +151,34 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         return result;
     }
 
+    private Set<String> extractMagicValuesFromState(State state) {
+        Set<String> magicValues = new HashSet<>(state.magic_equals);
+        fuzzingGenerator
+                .generateStreamForMagicSubstrings(state.magic_substring)
+                .forEach(magicValues::add);
+        return magicValues;
+    }
+
     public void reportResult(ArrayList<State> states) {
-        if (method.getName().equals("call")) {
+        final String methodName = method.getName();
+
+        if (methodName.equals("query")) {
+            final int numberOfArgs = states.size();
+
+            List<Set<String>> argsExceptUri = new ArrayList<>(numberOfArgs - 1);
+            for (int i = 1; i < numberOfArgs; i++) {
+                State state = states.get(i);
+                Set<String> magicValues = extractMagicValuesFromState(state).stream()
+                        .filter(item -> !item.equals("null"))
+                        .collect(Collectors.toSet());
+                argsExceptUri.add(magicValues);
+            }
+
+            ContentProviderQuery contentProviderQuery = new ContentProviderQuery(argsExceptUri);
+            foundMagicValues.add(contentProviderQuery);
+        }
+
+        if (methodName.equals("call")) {
             final int numberOfArgs = states.size();
             final State firstArg = states.get(0);
             final State secondArg = states.get(1);
@@ -151,18 +186,11 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             if (numberOfArgs == 3) { // ContentProvider.call(..) with uri
                 statistics.reportCallMethod(method.toString());
 
-                Set<String> methodMagicValues = new HashSet<>(firstArg.magic_equals);
-                randomStringGenerator
-                        .generateStreamForMagicSubstrings(firstArg.magic_substring)
-                        .forEach(methodMagicValues::add);
-
-                Set<String> argMagicValues = new HashSet<>(secondArg.magic_equals);
-                randomStringGenerator
-                        .generateStreamForMagicSubstrings(secondArg.magic_substring)
-                        .forEach(argMagicValues::add);
+                Set<String> methodMagicValues = extractMagicValuesFromState(firstArg);
+                Set<String> argMagicValues = extractMagicValuesFromState(secondArg);
 
                 CallMethodAndArg callData = new CallMethodAndArg(methodMagicValues, argMagicValues);
-                callMethodAndArgSet.add(callData);
+                foundMagicValues.add(callData);
 
             } else if (numberOfArgs == 4) { // ContentProvider.call(..) with authority - API 29+
                 // Process 1st arg - authority (String)
@@ -767,7 +795,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         if (base_state != null || !args_mapping.isEmpty()) {
             if (!InvokeHook(v)) {
                 try {
-                    AnalyzeRefs callee_analyzer = new AnalyzeRefs(statistics, v.getMethod(), depth + 1, this);
+                    AnalyzeRefs callee_analyzer = new AnalyzeRefs(fuzzingGenerator, statistics, v.getMethod(), depth + 1, this);
                     i = 0;
                     for (Local l : callee_analyzer.body.getParameterLocals()) {
                         Constant c = constants_mapping.getOrDefault(i++, null);
@@ -930,7 +958,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         frame.state = lookupState(l);
     }
 
-    public Set<CallMethodAndArg> getCallMethodAndArgSet() {
-        return callMethodAndArgSet;
+    public Set<FoundMagicValues> getFoundMagicValues() {
+        return foundMagicValues;
     }
 }
