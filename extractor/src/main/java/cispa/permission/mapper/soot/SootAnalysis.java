@@ -9,6 +9,7 @@ import cispa.permission.mapper.model.ContentProviderQuery;
 import cispa.permission.mapper.model.FoundMagicValues;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import saarland.cispa.cp.fuzzing.serialization.ContentProviderApi;
 import saarland.cispa.cp.fuzzing.serialization.FuzzingData;
 import saarland.cispa.cp.fuzzing.serialization.FuzzingDataSerializer;
 import saarland.cispa.cp.fuzzing.serialization.ResolverCallUri;
@@ -124,12 +125,12 @@ public class SootAnalysis {
 
     private List<FuzzingData> convertToAppFormat(SootBodyTransformer transformer) {
         final String authorityName = transformer.getAuthorityName();
-        Set<FoundMagicValues> foundMagicValues = transformer.getFoundMagicValues();
+        Map<String, List<FoundMagicValues>> cpClassToMagicValuesMap = transformer.getCpClassToMagicValuesMap();
 
-        if (authorityName == null && !foundMagicValues.isEmpty()) {
+        if (authorityName == null && !cpClassToMagicValuesMap.isEmpty()) {
             String dexFileName = transformer.getDexFileName();
             logger.error(dexFileName + ": Magic values found but no authority name! " +
-                    "Magic values: " + foundMagicValues.toString());
+                    "Magic values: " + cpClassToMagicValuesMap.toString());
             return Collections.emptyList();
         }
 
@@ -137,56 +138,69 @@ public class SootAnalysis {
         final Set<String> providerUris = fuzzingGenerator.generateUriFromMatchers(providerUriMatchers);
 
         List<FuzzingData> result = new ArrayList<>();
-        for (FoundMagicValues magicValues : foundMagicValues) {
-            if (magicValues instanceof ContentProviderQuery) {
-                ContentProviderQuery data = (ContentProviderQuery) magicValues;
-                List<Set<String>> args = data.getArgs();
 
-                if (data.isApi1Implementation()) {
-                    for (String uri : providerUris) {
-                        Set<String> projections = args.get(0);
+        for (Map.Entry<String, List<FoundMagicValues>> entry : cpClassToMagicValuesMap.entrySet()) {
+            final String providerClassName = entry.getKey();
+            final List<FoundMagicValues> foundMagicValues = entry.getValue();
 
-                        if (projections.isEmpty()) {
-                            Set<String> selections = args.get(1);
-                            Set<String> selectionArgs = args.get(2);
-                            Set<String> sortOrders = args.get(3);
+            final List<ContentProviderApi> fuzzingData = new ArrayList<>();
 
-                            if (selections.isEmpty()) {
-                                AppFormatConverter
-                                        .processSelectionArgs(result, uri, null, selectionArgs, sortOrders);
+            for (FoundMagicValues magicValues : foundMagicValues) {
+                if (magicValues instanceof ContentProviderQuery) {
+                    ContentProviderQuery data = (ContentProviderQuery) magicValues;
+                    List<Set<String>> args = data.getArgs();
 
+                    if (data.isApi1Implementation()) {
+                        for (String uri : providerUris) {
+                            Set<String> projections = args.get(0);
+
+                            if (projections.isEmpty()) {
+                                Set<String> selections = args.get(1);
+                                Set<String> selectionArgs = args.get(2);
+                                Set<String> sortOrders = args.get(3);
+
+                                if (selections.isEmpty()) {
+                                    AppFormatConverter
+                                            .processSelectionArgs(fuzzingData,
+                                                    uri, null, selectionArgs, sortOrders);
+
+                                } else {
+                                    selections.forEach(selection -> AppFormatConverter
+                                            .processSelectionArgs(fuzzingData,
+                                                    uri, selection, selectionArgs, sortOrders));
+                                }
                             } else {
-                                selections.forEach(selection -> AppFormatConverter
-                                        .processSelectionArgs(result, uri, selection, selectionArgs, sortOrders));
+                                throw new IllegalStateException("Not implemented");
                             }
-                        } else {
-                            throw new IllegalStateException("Not implemented");
                         }
                     }
+
                 }
 
-            }
+                /* if (magicValues instanceof CallMethodAndArg) {
+                    CallMethodAndArg data = (CallMethodAndArg) magicValues;
+                    if (data.getMethodMagicEquals().isEmpty()) {
+                        ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
+                        result.add(callUri);
+                    } else {
 
-            if (magicValues instanceof CallMethodAndArg) {
-                CallMethodAndArg data = (CallMethodAndArg) magicValues;
-                if (data.getMethodMagicEquals().isEmpty()) {
-                    ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
-                    result.add(callUri);
-                } else {
-
-                    for (String methodMagicEqual : data.getMethodMagicEquals()) {
-                        if (data.getArgMagicEquals().isEmpty()) {
-                            ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
-                            result.add(callUri);
-                        } else {
-                            for (String argMagicEqual : data.getArgMagicEquals()) {
-                                ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
+                        for (String methodMagicEqual : data.getMethodMagicEquals()) {
+                            if (data.getArgMagicEquals().isEmpty()) {
+                                ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
                                 result.add(callUri);
+                            } else {
+                                for (String argMagicEqual : data.getArgMagicEquals()) {
+                                    ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
+                                    result.add(callUri);
+                                }
                             }
                         }
                     }
-                }
+                } */
             }
+
+            FuzzingData data = new FuzzingData(providerClassName, fuzzingData);
+            result.add(data);
         }
 
         return result;

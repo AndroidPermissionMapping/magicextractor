@@ -6,6 +6,9 @@ import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.model.CallMethodAndArg;
 import cispa.permission.mapper.model.ContentProviderQuery;
 import cispa.permission.mapper.model.FoundMagicValues;
+import cispa.permission.mapper.soot.exceptions.LoopException;
+import cispa.permission.mapper.soot.exceptions.NoBodyException;
+import cispa.permission.mapper.soot.exceptions.TooDeepException;
 import org.json.JSONArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,34 +39,10 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     private Value ret;
     public static boolean IGNORE_INTS = false;
 
-    private final Set<FoundMagicValues> foundMagicValues = new HashSet<>();
+    private final Map<String, List<FoundMagicValues>> cpClassNameToMagicValuesMap = new HashMap<>();
 
     private final FuzzingGenerator fuzzingGenerator;
     private final Statistics statistics;
-
-    public class NoBodyException extends RuntimeException {
-
-        public NoBodyException(SootMethod m) {
-            super("no method source set for method: " + m.getSignature());
-        }
-
-    }
-
-    public class TooDeepException extends RuntimeException {
-
-        public TooDeepException(SootMethod m) {
-            super("max recursion depth reached at method: " + m.getSignature());
-        }
-
-    }
-
-    public class LoopException extends RuntimeException {
-
-        public LoopException(SootMethod m) {
-            super("Loop at method: " + m.getSignature());
-        }
-
-    }
 
     public AnalyzeRefs(FuzzingGenerator fuzzingGenerator, Statistics statistics, SootMethod m, int depth,
                        AnalyzeRefs parent) {
@@ -105,23 +84,24 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
 
-    public AnalyzeRefs(FuzzingGenerator fuzzingGenerator, Statistics statistics, SootMethod m, int depth) {
+    public AnalyzeRefs(FuzzingGenerator fuzzingGenerator, Statistics statistics, SootMethod method, int depth) {
         this.fuzzingGenerator = fuzzingGenerator;
         this.statistics = statistics;
 
-        System.out.println("[" + depth + "] Created Analyzer for Method " + m.getSignature());
+        logger.info("[" + depth + "] Created Analyzer for Method " + method.getSignature());
         if (depth > max_depth) {
-            throw new TooDeepException(m);
-        }
-        method = m;
-
-        if (!m.hasActiveBody()) {
-            throw new NoBodyException(m);
+            throw new TooDeepException(method);
         }
 
-        body = (JimpleBody) m.retrieveActiveBody();
+        if (!method.hasActiveBody()) {
+            throw new NoBodyException(method);
+        }
+
+        this.method = method;
+
+        body = (JimpleBody) method.retrieveActiveBody();
         for (Local l : body.getParameterLocals()) {
-            states.put(l, new State(l, method));
+            states.put(l, new State(l, this.method));
         }
         for (Unit u : body.getUnits()) {
             units.add((Stmt) u);
@@ -160,7 +140,10 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
     public void reportResult(ArrayList<State> states) {
+        final String className = method.getDeclaringClass().getName();
         final String methodName = method.getName();
+
+        List<FoundMagicValues> fuzzingData = cpClassNameToMagicValuesMap.getOrDefault(className, new ArrayList<>());
 
         if (methodName.equals("query")) {
             final int numberOfArgs = states.size();
@@ -175,7 +158,8 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             }
 
             ContentProviderQuery contentProviderQuery = new ContentProviderQuery(argsExceptUri);
-            foundMagicValues.add(contentProviderQuery);
+            fuzzingData.add(contentProviderQuery);
+            cpClassNameToMagicValuesMap.put(className, fuzzingData);
         }
 
         if (methodName.equals("call")) {
@@ -190,7 +174,8 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                 Set<String> argMagicValues = extractMagicValuesFromState(secondArg);
 
                 CallMethodAndArg callData = new CallMethodAndArg(methodMagicValues, argMagicValues);
-                foundMagicValues.add(callData);
+                fuzzingData.add(callData);
+                cpClassNameToMagicValuesMap.put(className, fuzzingData);
 
             } else if (numberOfArgs == 4) { // ContentProvider.call(..) with authority - API 29+
                 // Process 1st arg - authority (String)
@@ -958,7 +943,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         frame.state = lookupState(l);
     }
 
-    public Set<FoundMagicValues> getFoundMagicValues() {
-        return foundMagicValues;
+    public Map<String, List<FoundMagicValues>> getCpClassNameToMagicValuesMap() {
+        return cpClassNameToMagicValuesMap;
     }
 }

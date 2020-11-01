@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Set;
 
 public class ContentProviderQuery implements FoundMagicValues {
+
     private final List<Set<String>> args;
 
     public ContentProviderQuery(List<Set<String>> args) {
@@ -17,4 +18,5 @@ public class ContentProviderQuery implements FoundMagicValues {
     public List<Set<String>> getArgs() {
         return args;
     }
+
 }

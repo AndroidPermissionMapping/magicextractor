@@ -10,10 +10,7 @@ import soot.jimple.JimpleBody;
 import soot.jimple.Stmt;
 import soot.jimple.internal.JInvokeStmt;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static cispa.permission.mapper.Utils.immediateString;
 import static cispa.permission.mapper.Utils.result;
@@ -26,7 +23,7 @@ public class SootBodyTransformer extends BodyTransformer {
     private final Statistics statistics;
 
     private final Set<String> providerUriMatchers;
-    private final Set<FoundMagicValues> foundMagicValues;
+    private final Map<String, List<FoundMagicValues>> cpClassToMagicValuesMap;
 
     private String authorityName;
 
@@ -34,8 +31,9 @@ public class SootBodyTransformer extends BodyTransformer {
         this.dexFileName = dexFileName;
         this.fuzzingGenerator = fuzzingGenerator;
         this.statistics = statistics;
+
         providerUriMatchers = new HashSet<>();
-        foundMagicValues = new HashSet<>();
+        cpClassToMagicValuesMap = new HashMap<>();
     }
 
     @Override
@@ -66,8 +64,8 @@ public class SootBodyTransformer extends BodyTransformer {
                 AnalyzeRefs analyzeRefs = new AnalyzeRefs(fuzzingGenerator, statistics, m, 0);
                 analyzeRefs.run();
 
-                Set<FoundMagicValues> magicValues = analyzeRefs.getFoundMagicValues();
-                foundMagicValues.addAll(magicValues);
+                Map<String, List<FoundMagicValues>> magicValues = analyzeRefs.getCpClassNameToMagicValuesMap();
+                magicValues.forEach(cpClassToMagicValuesMap::put);
             case "<clinit>":
                 analyzeClinit(m);
             default:
@@ -122,11 +120,12 @@ public class SootBodyTransformer extends BodyTransformer {
         return authorityName;
     }
 
-    public Set<FoundMagicValues> getFoundMagicValues() {
-        return foundMagicValues;
+    public Map<String, List<FoundMagicValues>> getCpClassToMagicValuesMap() {
+        return cpClassToMagicValuesMap;
     }
 
     public String getDexFileName() {
         return dexFileName;
     }
+
 }
