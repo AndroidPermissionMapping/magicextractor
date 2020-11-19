@@ -6,12 +6,14 @@ import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.model.CallMethodAndArg;
 import cispa.permission.mapper.model.ContentProviderQuery;
 import cispa.permission.mapper.model.FoundMagicValues;
+import cispa.permission.mapper.model.InsertMagicValues;
 import cispa.permission.mapper.soot.exceptions.LoopException;
 import cispa.permission.mapper.soot.exceptions.NoBodyException;
 import cispa.permission.mapper.soot.exceptions.TooDeepException;
 import org.json.JSONArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import saarland.cispa.cp.fuzzing.serialization.ContentValue;
 import soot.Local;
 import soot.SootMethod;
 import soot.Unit;
@@ -145,6 +147,37 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
         List<FoundMagicValues> fuzzingData = cpClassNameToMagicValuesMap.getOrDefault(className, new ArrayList<>());
 
+        if (methodName.equals("insert")) {
+            for (State state : states) {
+
+                Set<BundleElement> contentValues = state.cv_elements;
+                for (BundleElement bundleElement : contentValues) {
+                    String typeName = bundleElement.type.toString();
+                    String key = bundleElement.name;
+                    Object value = bundleElement.value;
+
+                    if (value != null) {
+                        throw new IllegalStateException("Unknown value type");
+                    }
+
+                    switch (typeName) {
+                        case "java.lang.String":
+                        case "java.lang.Integer":
+                        case "java.lang.Long":
+                        case "java.lang.Boolean":
+                        case "java.lang.Object":
+                        case "byte[]":
+                            ContentValue contentValue = new ContentValue(typeName, key);
+                            InsertMagicValues magicValues = new InsertMagicValues(contentValue);
+                            fuzzingData.add(magicValues);
+                            break;
+                        default:
+                            throw new IllegalStateException("Unknown type in content values: " + typeName);
+                    }
+                }
+            }
+        }
+
         if (methodName.equals("query")) {
             final int numberOfArgs = states.size();
 
@@ -186,9 +219,9 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
             } else {
                 throw new IllegalStateException("Not implemented");
             }
-
-
         }
+
+        cpClassNameToMagicValuesMap.put(className, fuzzingData);
 
 
         JSONArray obj = new JSONArray();

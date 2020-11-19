@@ -65,7 +65,16 @@ public class SootBodyTransformer extends BodyTransformer {
                 analyzeRefs.run();
 
                 Map<String, List<FoundMagicValues>> magicValues = analyzeRefs.getCpClassNameToMagicValuesMap();
-                magicValues.forEach(cpClassToMagicValuesMap::put);
+
+                magicValues.forEach((cpClassName, magics) -> {
+                    List<FoundMagicValues> existingMagicValues = cpClassToMagicValuesMap
+                            .getOrDefault(cpClassName, new ArrayList<>());
+                    existingMagicValues.addAll(magics);
+
+                    cpClassToMagicValuesMap.put(cpClassName, existingMagicValues);
+                });
+
+                break;
             case "<clinit>":
                 analyzeClinit(m);
             default:

@@ -7,12 +7,10 @@ import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.model.CallMethodAndArg;
 import cispa.permission.mapper.model.ContentProviderQuery;
 import cispa.permission.mapper.model.FoundMagicValues;
+import cispa.permission.mapper.model.InsertMagicValues;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import saarland.cispa.cp.fuzzing.serialization.ContentProviderApi;
-import saarland.cispa.cp.fuzzing.serialization.FuzzingData;
-import saarland.cispa.cp.fuzzing.serialization.FuzzingDataSerializer;
-import saarland.cispa.cp.fuzzing.serialization.ResolverCallUri;
+import saarland.cispa.cp.fuzzing.serialization.*;
 import soot.G;
 import soot.Pack;
 import soot.PackManager;
@@ -175,6 +173,15 @@ public class SootAnalysis {
                         }
                     }
 
+                }
+
+                if (magicValues instanceof InsertMagicValues) {
+                    InsertMagicValues data = (InsertMagicValues) magicValues;
+
+                    for (String uri : providerUris) {
+                        ResolverCallInsert resolverCallInsert = new ResolverCallInsert(uri, data.getContentValue());
+                        fuzzingData.add(resolverCallInsert);
+                    }
                 }
 
                 /* if (magicValues instanceof CallMethodAndArg) {
