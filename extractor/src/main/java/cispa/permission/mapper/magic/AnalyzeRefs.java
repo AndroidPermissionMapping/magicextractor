@@ -14,6 +14,7 @@ import org.json.JSONArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import saarland.cispa.cp.fuzzing.serialization.ContentValue;
+import saarland.cispa.cp.fuzzing.serialization.ContentValueType;
 import soot.Local;
 import soot.SootMethod;
 import soot.Unit;
@@ -160,20 +161,11 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
                         throw new IllegalStateException("Unknown value type");
                     }
 
-                    switch (typeName) {
-                        case "java.lang.String":
-                        case "java.lang.Integer":
-                        case "java.lang.Long":
-                        case "java.lang.Boolean":
-                        case "java.lang.Object":
-                        case "byte[]":
-                            ContentValue contentValue = new ContentValue(typeName, key);
-                            InsertMagicValues magicValues = new InsertMagicValues(contentValue);
-                            fuzzingData.add(magicValues);
-                            break;
-                        default:
-                            throw new IllegalStateException("Unknown type in content values: " + typeName);
-                    }
+                    ContentValueType valueType = ContentValueType.Companion.fromJavaClassName(typeName);
+                    ContentValue contentValue = new ContentValue(valueType, key);
+
+                    InsertMagicValues magicValues = new InsertMagicValues(contentValue);
+                    fuzzingData.add(magicValues);
                 }
             }
         }
