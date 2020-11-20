@@ -220,7 +220,6 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         for (State s : states) {
             obj.put(s.toJSON());
         }
-        Utils.result(method, obj, "AnalyzeRefs");
     }
 
     @Override

@@ -45,7 +45,6 @@ public class SootAnalysis {
         BufferedWriter myWriter = new BufferedWriter(new FileWriter(f));
         myWriter.write("[\n");
 
-        Utils.f = myWriter;
 
         return myWriter;
     }
@@ -91,34 +90,25 @@ public class SootAnalysis {
                 .collect(Collectors.toList());
     }
 
-    public void start() throws IOException {
+    public void start() {
         List<String> dexFileNames = findDexFiles();
 
-        String resultsFile = parameters.getResultsFilePath();
-        BufferedWriter myWriter = prepare(resultsFile);
-        try {
-            List<FuzzingData> results = new ArrayList<>();
-            for (String filename : dexFileNames) {
-                System.out.println(filename);
+        List<FuzzingData> results = new ArrayList<>();
+        for (String filename : dexFileNames) {
+            System.out.println(filename);
 
-                SootBodyTransformer bodyTransformer = setupSoot(filename);
-                soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
+            SootBodyTransformer bodyTransformer = setupSoot(filename);
+            soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
 
-                // Process results
-                List<FuzzingData> appFormatResults = convertToAppFormat(bodyTransformer);
-                results.addAll(appFormatResults);
-            }
-
-            statistics.print(false);
-
-            String appOutput = resultsFile.replace(".json", "") + ".app.json";
-            FuzzingDataSerializer.INSTANCE.serialize(appOutput, results);
-
-        } finally {
-            myWriter.write("\n]");
-            myWriter.flush();
-            myWriter.close();
+            // Process results
+            List<FuzzingData> appFormatResults = convertToAppFormat(bodyTransformer);
+            results.addAll(appFormatResults);
         }
+
+        statistics.print(false);
+
+        String resultsFilePath = parameters.getResultsFilePath();
+        FuzzingDataSerializer.INSTANCE.serialize(resultsFilePath, results);
     }
 
     private List<FuzzingData> convertToAppFormat(SootBodyTransformer transformer) {

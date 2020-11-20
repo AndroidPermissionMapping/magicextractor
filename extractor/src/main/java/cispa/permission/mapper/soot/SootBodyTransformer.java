@@ -13,7 +13,6 @@ import soot.jimple.internal.JInvokeStmt;
 import java.util.*;
 
 import static cispa.permission.mapper.Utils.immediateString;
-import static cispa.permission.mapper.Utils.result;
 
 public class SootBodyTransformer extends BodyTransformer {
 
@@ -116,8 +115,6 @@ public class SootBodyTransformer extends BodyTransformer {
 
 
         }
-        result(call, matches, "UriMatcher", "");
-
         providerUriMatchers.addAll(matches);
     }
 

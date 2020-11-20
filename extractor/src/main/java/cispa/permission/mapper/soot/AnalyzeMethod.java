@@ -196,7 +196,6 @@ public class AnalyzeMethod {
         for (State s: states){
             obj.put(s.toJSON());
         }
-        Utils.result(call, obj, "AnalyzeFunction.analyzeRefs");
     }
 
 }
