@@ -8,9 +8,11 @@ buildscript {
 }
 
 plugins {
+    id "org.jetbrains.kotlin.jvm"
     id 'application'
 }
 apply plugin: 'java'
+apply plugin: 'kotlin'
 apply plugin: 'com.github.johnrengelman.shadow'
 
 group 'staticanalysis'

@@ -1,6 +1,7 @@
 package cispa.permission.mapper.soot;
 
 import cispa.permission.mapper.Statistics;
+import cispa.permission.mapper.extractors.MagicValueExtractor;
 import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.magic.AnalyzeRefs;
 import cispa.permission.mapper.model.FoundMagicValues;
@@ -60,7 +61,8 @@ public class SootBodyTransformer extends BodyTransformer {
             case "delete":
             case "refresh":
             case "call":
-                AnalyzeRefs analyzeRefs = new AnalyzeRefs(fuzzingGenerator, statistics, m, 0);
+                MagicValueExtractor magicValueExtractor = new MagicValueExtractor(fuzzingGenerator);
+                AnalyzeRefs analyzeRefs = new AnalyzeRefs(magicValueExtractor, statistics, m, 0);
                 analyzeRefs.run();
 
                 Map<String, List<FoundMagicValues>> magicValues = analyzeRefs.getCpClassNameToMagicValuesMap();

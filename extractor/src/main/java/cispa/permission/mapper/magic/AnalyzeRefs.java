@@ -1,20 +1,13 @@
 package cispa.permission.mapper.magic;
 
-import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.Statistics;
-import cispa.permission.mapper.Utils;
-import cispa.permission.mapper.model.CallMethodAndArg;
-import cispa.permission.mapper.model.ContentProviderQuery;
+import cispa.permission.mapper.extractors.MagicValueExtractor;
 import cispa.permission.mapper.model.FoundMagicValues;
-import cispa.permission.mapper.model.InsertMagicValues;
 import cispa.permission.mapper.soot.exceptions.LoopException;
 import cispa.permission.mapper.soot.exceptions.NoBodyException;
 import cispa.permission.mapper.soot.exceptions.TooDeepException;
-import org.json.JSONArray;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import saarland.cispa.cp.fuzzing.serialization.ContentValue;
-import saarland.cispa.cp.fuzzing.serialization.ContentValueType;
 import soot.Local;
 import soot.SootMethod;
 import soot.Unit;
@@ -22,8 +15,10 @@ import soot.Value;
 import soot.jimple.*;
 import soot.util.ArraySet;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
@@ -44,12 +39,12 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
 
     private final Map<String, List<FoundMagicValues>> cpClassNameToMagicValuesMap = new HashMap<>();
 
-    private final FuzzingGenerator fuzzingGenerator;
+    private final MagicValueExtractor magicValueExtractor;
     private final Statistics statistics;
 
-    public AnalyzeRefs(FuzzingGenerator fuzzingGenerator, Statistics statistics, SootMethod m, int depth,
+    public AnalyzeRefs(MagicValueExtractor magicValueExtractor, Statistics statistics, SootMethod m, int depth,
                        AnalyzeRefs parent) {
-        this.fuzzingGenerator = fuzzingGenerator;
+        this.magicValueExtractor = magicValueExtractor;
         this.statistics = statistics;
 
         this.parent = parent;
@@ -87,8 +82,8 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
     }
 
 
-    public AnalyzeRefs(FuzzingGenerator fuzzingGenerator, Statistics statistics, SootMethod method, int depth) {
-        this.fuzzingGenerator = fuzzingGenerator;
+    public AnalyzeRefs(MagicValueExtractor magicValueExtractor, Statistics statistics, SootMethod method, int depth) {
+        this.magicValueExtractor = magicValueExtractor;
         this.statistics = statistics;
 
         logger.info("[" + depth + "] Created Analyzer for Method " + method.getSignature());
@@ -134,92 +129,18 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         return result;
     }
 
-    private Set<String> extractMagicValuesFromState(State state) {
-        Set<String> magicValues = new HashSet<>(state.magic_equals);
-        fuzzingGenerator
-                .generateStreamForMagicSubstrings(state.magic_substring)
-                .forEach(magicValues::add);
-        return magicValues;
-    }
-
     public void reportResult(ArrayList<State> states) {
         final String className = method.getDeclaringClass().getName();
         final String methodName = method.getName();
 
         List<FoundMagicValues> fuzzingData = cpClassNameToMagicValuesMap.getOrDefault(className, new ArrayList<>());
 
-        if (methodName.equals("insert")) {
-            for (State state : states) {
-
-                Set<BundleElement> contentValues = state.cv_elements;
-                for (BundleElement bundleElement : contentValues) {
-                    String typeName = bundleElement.type.toString();
-                    String key = bundleElement.name;
-                    Object value = bundleElement.value;
-
-                    if (value != null) {
-                        throw new IllegalStateException("Unknown value type");
-                    }
-
-                    ContentValueType valueType = ContentValueType.Companion.fromJavaClassName(typeName);
-                    ContentValue contentValue = new ContentValue(valueType, key);
-
-                    InsertMagicValues magicValues = new InsertMagicValues(contentValue);
-                    fuzzingData.add(magicValues);
-                }
-            }
-        }
-
-        if (methodName.equals("query")) {
-            final int numberOfArgs = states.size();
-
-            List<Set<String>> argsExceptUri = new ArrayList<>(numberOfArgs - 1);
-            for (int i = 1; i < numberOfArgs; i++) {
-                State state = states.get(i);
-                Set<String> magicValues = extractMagicValuesFromState(state).stream()
-                        .filter(item -> !item.equals("null"))
-                        .collect(Collectors.toSet());
-                argsExceptUri.add(magicValues);
-            }
-
-            ContentProviderQuery contentProviderQuery = new ContentProviderQuery(argsExceptUri);
-            fuzzingData.add(contentProviderQuery);
-            cpClassNameToMagicValuesMap.put(className, fuzzingData);
-        }
-
-        if (methodName.equals("call")) {
-            final int numberOfArgs = states.size();
-            final State firstArg = states.get(0);
-            final State secondArg = states.get(1);
-
-            if (numberOfArgs == 3) { // ContentProvider.call(..) with uri
-                statistics.reportCallMethod(method.toString());
-
-                Set<String> methodMagicValues = extractMagicValuesFromState(firstArg);
-                Set<String> argMagicValues = extractMagicValuesFromState(secondArg);
-
-                CallMethodAndArg callData = new CallMethodAndArg(methodMagicValues, argMagicValues);
-                fuzzingData.add(callData);
-                cpClassNameToMagicValuesMap.put(className, fuzzingData);
-
-            } else if (numberOfArgs == 4) { // ContentProvider.call(..) with authority - API 29+
-                // Process 1st arg - authority (String)
-                if (!firstArg.magic_equals.isEmpty()) {
-                    throw new IllegalStateException("Not implemented - call API 29+");
-                }
-
-            } else {
-                throw new IllegalStateException("Not implemented");
-            }
+        List<FoundMagicValues> results = magicValueExtractor.extract(methodName, states);
+        if (results != null) {
+            fuzzingData.addAll(results);
         }
 
         cpClassNameToMagicValuesMap.put(className, fuzzingData);
-
-
-        JSONArray obj = new JSONArray();
-        for (State s : states) {
-            obj.put(s.toJSON());
-        }
     }
 
     @Override
@@ -804,7 +725,7 @@ public class AnalyzeRefs implements StmtSwitch, JimpleValueSwitch, ExprSwitch {
         if (base_state != null || !args_mapping.isEmpty()) {
             if (!InvokeHook(v)) {
                 try {
-                    AnalyzeRefs callee_analyzer = new AnalyzeRefs(fuzzingGenerator, statistics, v.getMethod(), depth + 1, this);
+                    AnalyzeRefs callee_analyzer = new AnalyzeRefs(magicValueExtractor, statistics, v.getMethod(), depth + 1, this);
                     i = 0;
                     for (Local l : callee_analyzer.body.getParameterLocals()) {
                         Constant c = constants_mapping.getOrDefault(i++, null);
