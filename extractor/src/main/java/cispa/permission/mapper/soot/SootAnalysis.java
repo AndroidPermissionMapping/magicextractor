@@ -108,15 +108,7 @@ public class SootAnalysis {
     }
 
     private List<FuzzingData> convertToAppFormat(SootBodyTransformer transformer) {
-        final String authorityName = transformer.getAuthorityName();
         Map<String, List<FoundMagicValues>> cpClassToMagicValuesMap = transformer.getCpClassToMagicValuesMap();
-
-        if (authorityName == null && !cpClassToMagicValuesMap.isEmpty()) {
-            String dexFileName = transformer.getDexFileName();
-            logger.error(dexFileName + ": Magic values found but no authority name! " +
-                    "Magic values: " + cpClassToMagicValuesMap.toString());
-            return Collections.emptyList();
-        }
 
         final Set<String> providerUriMatchers = transformer.getProviderUriMatchers();
         final Set<String> providerUris = fuzzingGenerator.generateUriFromMatchers(providerUriMatchers);
@@ -199,26 +191,53 @@ public class SootAnalysis {
                     }
                 }
 
-                /* if (magicValues instanceof CallMethodAndArg) {
+                if (magicValues instanceof CallMethodAndArg) {
                     CallMethodAndArg data = (CallMethodAndArg) magicValues;
-                    if (data.getMethodMagicEquals().isEmpty()) {
-                        ResolverCallUri callUri = new ResolverCallUri(authorityName, null, null, null);
-                        result.add(callUri);
-                    } else {
 
-                        for (String methodMagicEqual : data.getMethodMagicEquals()) {
-                            if (data.getArgMagicEquals().isEmpty()) {
-                                ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, null, null);
-                                result.add(callUri);
-                            } else {
-                                for (String argMagicEqual : data.getArgMagicEquals()) {
-                                    ResolverCallUri callUri = new ResolverCallUri(authorityName, methodMagicEqual, argMagicEqual, null);
-                                    result.add(callUri);
+                    Set<String> methodMagics = data.getMethodMagicEquals();
+                    Set<String> argMagics = data.getArgMagicEquals();
+                    Set<BundleKey> extrasMagics = data.getExtrasMagicValues();
+
+                    switch (data.getType()) {
+                        case API_11:
+                            for (String uri : providerUris) {
+                                for (String method : methodMagics) {
+
+                                    if (argMagics.isEmpty()) {
+                                        handleCallExtras(fuzzingData, CallApiLevel.API_11, uri, method, null, extrasMagics);
+                                        continue;
+                                    }
+
+                                    for (String arg : argMagics) {
+                                        handleCallExtras(fuzzingData, CallApiLevel.API_11, uri, method, arg, extrasMagics);
+                                    }
                                 }
                             }
-                        }
+
+                            break;
+                        case API_29:
+                            final String authorityName = transformer.getAuthorityName();
+                            if (authorityName == null) {
+                                logger.error("Found magic values but authority name is null???");
+                                continue;
+                            }
+
+                            for (String method : methodMagics) {
+
+                                if (argMagics.isEmpty()) {
+                                    handleCallExtras(fuzzingData, CallApiLevel.API_29, authorityName, method, null, extrasMagics);
+                                    continue;
+                                }
+
+                                for (String arg : argMagics) {
+                                    handleCallExtras(fuzzingData, CallApiLevel.API_29, authorityName, method, arg, extrasMagics);
+                                }
+                            }
+                            break;
+                        default:
+                            throw new IllegalStateException("Unknown call magic values.");
                     }
-                } */
+                }
             }
 
             FuzzingData data = new FuzzingData(providerClassName, fuzzingData);
@@ -226,5 +245,18 @@ public class SootAnalysis {
         }
 
         return result;
+    }
+
+    private void handleCallExtras(List<ContentProviderApi> fuzzingData, CallApiLevel apiLevel,
+                                  String uri, String method, String arg, Set<BundleKey> extrasMagics) {
+        if (extrasMagics.isEmpty()) {
+            ResolverCallUri resolverCallUri = new ResolverCallUri(uri, apiLevel, method, arg, null);
+            fuzzingData.add(resolverCallUri);
+        }
+
+        for (BundleKey extras : extrasMagics) {
+            ResolverCallUri resolverCallUri = new ResolverCallUri(uri, apiLevel, method, arg, extras);
+            fuzzingData.add(resolverCallUri);
+        }
     }
 }
