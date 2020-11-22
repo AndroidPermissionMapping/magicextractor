@@ -1,15 +1,27 @@
 package cispa.permission.mapper.model;
 
+import saarland.cispa.cp.fuzzing.serialization.BundleKey;
+
 import java.util.Objects;
 import java.util.Set;
 
 public class CallMethodAndArg implements FoundMagicValues {
+
+    private final CallApiType type;
     private final Set<String> methodMagicEquals;
     private final Set<String> argMagicEquals;
+    private final Set<BundleKey> extrasMagicValues;
 
-    public CallMethodAndArg(Set<String> methodMagicEquals, Set<String> argMagicEquals) {
+    public CallMethodAndArg(CallApiType type, Set<String> methodMagicEquals, Set<String> argMagicEquals,
+                            Set<BundleKey> extrasMagicValues) {
+        this.type = type;
         this.methodMagicEquals = methodMagicEquals;
         this.argMagicEquals = argMagicEquals;
+        this.extrasMagicValues = extrasMagicValues;
+    }
+
+    public CallApiType getType() {
+        return type;
     }
 
     public Set<String> getMethodMagicEquals() {
@@ -18,6 +30,10 @@ public class CallMethodAndArg implements FoundMagicValues {
 
     public Set<String> getArgMagicEquals() {
         return argMagicEquals;
+    }
+
+    public Set<BundleKey> getExtrasMagicValues() {
+        return extrasMagicValues;
     }
 
     @Override

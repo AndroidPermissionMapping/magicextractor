@@ -11,15 +11,17 @@ class MagicValueExtractor(fuzzingGenerator: FuzzingGenerator) {
     init {
         val extractors = listOf(
                 CallExtractor(fuzzingGenerator),
+                DeleteExtractor(fuzzingGenerator),
                 InsertExtractor(fuzzingGenerator),
-                QueryExtractor(fuzzingGenerator)
+                QueryExtractor(fuzzingGenerator),
+                UpdateExtractor(fuzzingGenerator)
         )
 
         methodNameToExtractor = mutableMapOf()
         extractors.forEach { e -> methodNameToExtractor[e.methodName] = e }
     }
 
-    public fun extract(methodName: String, states: List<State>): List<FoundMagicValues>? {
+    fun extract(methodName: String, states: List<State>): List<FoundMagicValues>? {
         val extractor = methodNameToExtractor[methodName]
         return extractor?.extract(states)
     }

@@ -1,13 +1,9 @@
 package cispa.permission.mapper.soot;
 
 import cispa.permission.mapper.Statistics;
-import cispa.permission.mapper.Utils;
 import cispa.permission.mapper.fuzzer.AppFormatConverter;
 import cispa.permission.mapper.fuzzer.FuzzingGenerator;
-import cispa.permission.mapper.model.CallMethodAndArg;
-import cispa.permission.mapper.model.ContentProviderQuery;
-import cispa.permission.mapper.model.FoundMagicValues;
-import cispa.permission.mapper.model.InsertMagicValues;
+import cispa.permission.mapper.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import saarland.cispa.cp.fuzzing.serialization.*;
@@ -163,6 +159,35 @@ public class SootAnalysis {
                         }
                     }
 
+                }
+
+                if (magicValues instanceof UpdateMagicValues) {
+                    UpdateMagicValues data = (UpdateMagicValues) magicValues;
+
+                    Set<BundleKey> contentValues = data.getContentValues();
+                    Set<String> selectionStrings = data.getSelections();
+
+                    for (String uri : providerUris) {
+                        for (BundleKey contentValue : contentValues) {
+                            for (String selectionString : selectionStrings) {
+                                ResolverCallUpdate resolverCallUpdate =
+                                        new ResolverCallUpdate(uri, contentValue, selectionString);
+                                fuzzingData.add(resolverCallUpdate);
+                            }
+                        }
+                    }
+                }
+
+                if (magicValues instanceof DeleteMagicValues) {
+                    DeleteMagicValues data = (DeleteMagicValues) magicValues;
+                    Set<String> selectionStrings = data.getSelectionStrings();
+
+                    for (String uri : providerUris) {
+                        for (String selection : selectionStrings) {
+                            ResolverCallDelete resolverCallDelete = new ResolverCallDelete(uri, selection);
+                            fuzzingData.add(resolverCallDelete);
+                        }
+                    }
                 }
 
                 if (magicValues instanceof InsertMagicValues) {

@@ -1,15 +1,15 @@
 package cispa.permission.mapper.model;
 
-import saarland.cispa.cp.fuzzing.serialization.ContentValue;
+import saarland.cispa.cp.fuzzing.serialization.BundleKey;
 
 public class InsertMagicValues implements FoundMagicValues {
-    private final ContentValue contentValue;
+    private final BundleKey contentValue;
 
-    public InsertMagicValues(ContentValue contentValue) {
+    public InsertMagicValues(BundleKey contentValue) {
         this.contentValue = contentValue;
     }
 
-    public ContentValue getContentValue() {
+    public BundleKey getContentValue() {
         return contentValue;
     }
 }

@@ -16,7 +16,7 @@ class QueryExtractor(fuzzingGenerator: FuzzingGenerator) : BaseExtractor<Content
         val argsExceptUri: MutableList<Set<String>> = ArrayList(numberOfArgs - 1)
         for (i in 1 until numberOfArgs) {
             val state = states[i]
-            val magicValues: Set<String> = extractMagicValuesFromState(state)
+            val magicValues: Set<String> = extractMagicStringsFromState(state)
                     .filter { item: String -> item != "null" }
                     .toSet()
             argsExceptUri.add(magicValues)

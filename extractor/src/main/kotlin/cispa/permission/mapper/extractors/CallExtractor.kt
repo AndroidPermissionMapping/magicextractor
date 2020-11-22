@@ -2,6 +2,7 @@ package cispa.permission.mapper.extractors
 
 import cispa.permission.mapper.fuzzer.FuzzingGenerator
 import cispa.permission.mapper.magic.State
+import cispa.permission.mapper.model.CallApiType
 import cispa.permission.mapper.model.CallMethodAndArg
 
 class CallExtractor(fuzzingGenerator: FuzzingGenerator) : BaseExtractor<CallMethodAndArg>(fuzzingGenerator) {
@@ -10,29 +11,39 @@ class CallExtractor(fuzzingGenerator: FuzzingGenerator) : BaseExtractor<CallMeth
         get() = "call"
 
     override fun extract(states: List<State>): List<CallMethodAndArg> {
-        val result = mutableListOf<CallMethodAndArg>()
+        val callData: CallMethodAndArg = when (states.size) {
+            // call (String method, String arg, Bundle extras)
+            3 -> {
+                val callApiType = CallApiType.API_11
+                val methodState = states[0]
+                val argState = states[1]
+                val bundleState = states[2]
 
-        val numberOfArgs = states.size
-        val firstArg = states[0]
-        val secondArg = states[1]
-
-        when (numberOfArgs) {
-            3 -> { // ContentProvider.call(..) with uri
-                val methodMagicValues = extractMagicValuesFromState(firstArg)
-                val argMagicValues = extractMagicValuesFromState(secondArg)
-                val callData = CallMethodAndArg(methodMagicValues, argMagicValues)
-
-                result.add(callData)
-
+                extractMagicValues(callApiType, methodState, argState, bundleState)
             }
-            4 -> { // ContentProvider.call(..) with authority - API 29+
-                // Process 1st arg - authority (String)
-                check(firstArg.magic_equals.isEmpty()) { "Not implemented - call API 29+" }
+
+            // call (String authority, String method, String arg, Bundle extras)
+            4 -> {
+                val callApiType = CallApiType.API_29
+                val methodState = states[1]
+                val argState = states[2]
+                val bundleState = states[3]
+
+                extractMagicValues(callApiType, methodState, argState, bundleState)
             }
-            else -> {
-                throw IllegalStateException("Not implemented")
-            }
+
+            else -> throw NotImplementedError("Unknown call api")
         }
-        return result
+
+        return listOf(callData)
+    }
+
+    private fun extractMagicValues(callApiType: CallApiType,
+                                   methodState: State, argState: State, bundleState: State): CallMethodAndArg {
+        val methodMagicValues = extractMagicStringsFromState(methodState)
+        val argMagicValues = extractMagicStringsFromState(argState)
+        val extraMagicValues = extractBundleFromState(bundleState)
+
+        return CallMethodAndArg(callApiType, methodMagicValues, argMagicValues, extraMagicValues)
     }
 }
