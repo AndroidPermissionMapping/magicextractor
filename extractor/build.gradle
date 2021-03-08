@@ -24,7 +24,7 @@ repositories {
     mavenCentral()
 }
 
-mainClassName = 'cispa.permission.mapper.main'
+mainClassName = 'cispa.permission.mapper.Main'
 
 dependencies {
     compile project(":cp-fuzzing-serialization")
