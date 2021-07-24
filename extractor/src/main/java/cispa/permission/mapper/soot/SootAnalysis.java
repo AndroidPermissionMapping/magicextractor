@@ -17,6 +17,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -54,8 +56,11 @@ public class SootAnalysis {
 
         // Android related
         sootOptions.set_allow_phantom_refs(true);
-        sootOptions.set_android_jars(parameters.getAndroidJarsFolderPath());
         sootOptions.set_src_prec(Options.src_prec_apk);
+        sootOptions.set_android_api_version(29);
+
+        String sootClassPath = createSootClassPath();
+        sootOptions.set_soot_classpath(sootClassPath);
 
         // Input
         List<String> processDirs = new ArrayList<>();
@@ -75,6 +80,14 @@ public class SootAnalysis {
         p.add(new Transform("jtp.myTransform", bodyTransformer));
 
         return bodyTransformer;
+    }
+
+    private String createSootClassPath() {
+        Path pathToAndroidJar = Paths.get(parameters.getAndroidJarsFolderPath(), "/android-29/android.jar")
+                .toAbsolutePath();
+        Path pathToClassesJar = Paths.get(parameters.getDexFolderPath(), "classes.jar")
+                .toAbsolutePath();
+        return pathToAndroidJar + ":" + pathToClassesJar;
     }
 
     private List<String> findDexFiles() {
