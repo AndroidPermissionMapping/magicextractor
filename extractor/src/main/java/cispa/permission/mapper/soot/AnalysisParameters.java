@@ -7,19 +7,22 @@ public class AnalysisParameters {
     private final String resultsFilePath;
 
     private final boolean ignoreInts;
+    private final boolean printCpClassNames;
 
     public AnalysisParameters(
             String androidJarsFolderPath,
             String dexFolderPath,
             String sootOutputFolderPath,
             String resultsFilePath,
-            boolean ignoreInts
+            boolean ignoreInts,
+            boolean printCpClassNames
     ) {
         this.androidJarsFolderPath = androidJarsFolderPath;
         this.dexFolderPath = dexFolderPath;
         this.sootOutputFolderPath = sootOutputFolderPath;
         this.resultsFilePath = resultsFilePath;
         this.ignoreInts = ignoreInts;
+        this.printCpClassNames = printCpClassNames;
     }
 
     public String getAndroidJarsFolderPath() {
@@ -40,5 +43,9 @@ public class AnalysisParameters {
 
     public boolean isIgnoreInts() {
         return ignoreInts;
+    }
+
+    public boolean printCpClassNames() {
+        return printCpClassNames;
     }
 }

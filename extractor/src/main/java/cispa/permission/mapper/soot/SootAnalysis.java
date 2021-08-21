@@ -1,5 +1,6 @@
 package cispa.permission.mapper.soot;
 
+import cispa.permission.mapper.CpClassFinder;
 import cispa.permission.mapper.Statistics;
 import cispa.permission.mapper.fuzzer.AppFormatConverter;
 import cispa.permission.mapper.fuzzer.FuzzingGenerator;
@@ -99,12 +100,21 @@ public class SootAnalysis {
                 .collect(Collectors.toList());
     }
 
-    public void start() {
+    public void start(){
         List<String> dexFileNames = findDexFiles();
+
+        Set<String> allCpClassNames = new HashSet<>();
 
         List<FuzzingData> results = new ArrayList<>();
         for (String filename : dexFileNames) {
             System.out.println(filename);
+
+            Set<String> cpClassNames = CpClassFinder.INSTANCE.findExportedCpClasses(filename);
+
+            if (parameters.printCpClassNames()) {
+                allCpClassNames.addAll(cpClassNames);
+            }
+
 
             SootBodyTransformer bodyTransformer = setupSoot(filename);
             soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
@@ -112,6 +122,10 @@ public class SootAnalysis {
             // Process results
             List<FuzzingData> appFormatResults = convertToAppFormat(bodyTransformer);
             results.addAll(appFormatResults);
+        }
+
+        if (parameters.printCpClassNames()) {
+            allCpClassNames.forEach(System.out::println);
         }
 
         statistics.print(false);

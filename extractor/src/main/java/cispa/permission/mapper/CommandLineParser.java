@@ -11,6 +11,8 @@ public class CommandLineParser {
     private static final String ARG_RESULTS_FILE = "output";
     private static final String ARG_IGNORE_INTS = "dont-ignore-ints";
 
+    private static final String ARG_PRINT_CP_CLASSNAMES = "print_cp_classnames";
+
     private Options options;
     private HelpFormatter helpFormatter;
 
@@ -42,6 +44,10 @@ public class CommandLineParser {
         opt_ints.setRequired(false);
         options.addOption(opt_ints);
 
+        Option printCpClassNames = new Option(ARG_PRINT_CP_CLASSNAMES, false,
+                "Print all content provider class names.");
+        options.addOption(printCpClassNames);
+
         return options;
     }
 
@@ -55,7 +61,8 @@ public class CommandLineParser {
                     commandLine.getOptionValue(ARG_DEXES),
                     commandLine.getOptionValue(ARG_SOOT),
                     commandLine.getOptionValue(ARG_RESULTS_FILE),
-                    commandLine.getOptionValue(ARG_IGNORE_INTS) == null
+                    commandLine.getOptionValue(ARG_IGNORE_INTS) == null,
+                    commandLine.hasOption(ARG_PRINT_CP_CLASSNAMES)
             );
         } catch (ParseException e) {
             System.out.println(e.getMessage());

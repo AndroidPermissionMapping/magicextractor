@@ -35,8 +35,8 @@ public class AnalyzeMethod {
         for (Unit bx: units){
             Stmt s = (Stmt) bx;
             if (s instanceof JAssignStmt) {
-                Value right = ((JAssignStmt) s).rightBox.getValue();
-                Value left = ((JAssignStmt) s).leftBox.getValue();
+                Value right = ((JAssignStmt) s).getRightOp();
+                Value left = ((JAssignStmt) s).getLeftOp();
                 if (right instanceof VirtualInvokeExpr){
                     Value base = ((VirtualInvokeExpr) right).getBase();
                     SootMethod method = ((VirtualInvokeExpr)right).getMethod();
