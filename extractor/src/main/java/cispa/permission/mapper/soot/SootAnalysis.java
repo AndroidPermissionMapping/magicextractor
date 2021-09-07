@@ -48,7 +48,7 @@ public class SootAnalysis {
         return myWriter;
     }
 
-    private SootBodyTransformer setupSoot(String filePath) {
+    private SootBodyTransformer setupSoot(String filePath, Set<String> cpClassNames) {
         G.reset();
 
         Options sootOptions = Options.v();
@@ -75,7 +75,7 @@ public class SootAnalysis {
             sootOptions.set_output_dir(outputFolderPath);
         }
 
-        SootBodyTransformer bodyTransformer = new SootBodyTransformer(filePath, fuzzingGenerator, statistics);
+        SootBodyTransformer bodyTransformer = new SootBodyTransformer(filePath, cpClassNames, fuzzingGenerator, statistics);
 
         Pack p = PackManager.v().getPack("jtp");
         p.add(new Transform("jtp.myTransform", bodyTransformer));
@@ -100,7 +100,7 @@ public class SootAnalysis {
                 .collect(Collectors.toList());
     }
 
-    public void start(){
+    public void start() {
         List<String> dexFileNames = findDexFiles();
 
         Set<String> allCpClassNames = new HashSet<>();
@@ -115,8 +115,7 @@ public class SootAnalysis {
                 allCpClassNames.addAll(cpClassNames);
             }
 
-
-            SootBodyTransformer bodyTransformer = setupSoot(filename);
+            SootBodyTransformer bodyTransformer = setupSoot(filename, cpClassNames);
             soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
 
             // Process results

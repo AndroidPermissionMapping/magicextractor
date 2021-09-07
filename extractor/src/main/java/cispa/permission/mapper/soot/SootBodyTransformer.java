@@ -17,6 +17,8 @@ import static cispa.permission.mapper.Utils.immediateString;
 
 public class SootBodyTransformer extends BodyTransformer {
 
+    private final Set<String> targetClassNames;
+
     private final FuzzingGenerator fuzzingGenerator;
 
     private final String dexFileName;
@@ -27,7 +29,8 @@ public class SootBodyTransformer extends BodyTransformer {
 
     private String authorityName;
 
-    public SootBodyTransformer(String dexFileName, FuzzingGenerator fuzzingGenerator, Statistics statistics) {
+    public SootBodyTransformer(String dexFileName, Set<String> targetClassNames, FuzzingGenerator fuzzingGenerator, Statistics statistics) {
+        this.targetClassNames = targetClassNames;
         this.dexFileName = dexFileName;
         this.fuzzingGenerator = fuzzingGenerator;
         this.statistics = statistics;
@@ -38,6 +41,10 @@ public class SootBodyTransformer extends BodyTransformer {
 
     @Override
     protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
+        if (!needToProcessBody(b)) {
+            return;
+        }
+
         SootMethod m = b.getMethod();
         SootClass superclass = m.getDeclaringClass();
         while (!superclass.getName().equals("android.content.ContentProvider") && superclass.hasSuperclass())
@@ -49,6 +56,12 @@ public class SootBodyTransformer extends BodyTransformer {
 
             analyzeMethod(m);
         }
+    }
+
+    private boolean needToProcessBody(Body body) {
+        String classNameOfBody = body.getMethod().getDeclaringClass().getName();
+        return targetClassNames.stream()
+                .anyMatch(classNameOfBody::endsWith);
     }
 
     private void analyzeMethod(SootMethod m) {
