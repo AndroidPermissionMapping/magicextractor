@@ -11,5 +11,7 @@ sootOutput
 .idea
 
 # Extractor tool
+*.dex
+*.jar
 extractor/output
 extractor/*.json
