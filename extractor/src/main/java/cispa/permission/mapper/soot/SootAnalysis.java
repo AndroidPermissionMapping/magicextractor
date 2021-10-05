@@ -1,17 +1,13 @@
 package cispa.permission.mapper.soot;
 
-import cispa.permission.mapper.CpClassFinder;
-import cispa.permission.mapper.Statistics;
+import cispa.permission.mapper.*;
 import cispa.permission.mapper.fuzzer.AppFormatConverter;
 import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import saarland.cispa.cp.fuzzing.serialization.*;
-import soot.G;
-import soot.Pack;
-import soot.PackManager;
-import soot.Transform;
+import soot.*;
 import soot.options.Options;
 
 import java.io.BufferedWriter;
@@ -48,12 +44,14 @@ public class SootAnalysis {
         return myWriter;
     }
 
-    private SootBodyTransformer setupSoot(String filePath, Set<String> cpClassNames) {
+    private void setupSoot(String filePath, BodyTransformer bodyTransformer,
+                                          ContentProviderAnalyzer providerAnalyzer) {
         G.reset();
 
         Options sootOptions = Options.v();
         // General
         sootOptions.set_keep_line_number(true);
+        sootOptions.set_whole_program(true);
 
         // Android related
         sootOptions.set_allow_phantom_refs(true);
@@ -75,12 +73,12 @@ public class SootAnalysis {
             sootOptions.set_output_dir(outputFolderPath);
         }
 
-        SootBodyTransformer bodyTransformer = new SootBodyTransformer(filePath, cpClassNames, fuzzingGenerator, statistics);
-
         Pack p = PackManager.v().getPack("jtp");
         p.add(new Transform("jtp.myTransform", bodyTransformer));
 
-        return bodyTransformer;
+        PackManager.v().getPack(ContentProviderAnalyzer.PHASE_NAME).add(
+                new Transform(ContentProviderAnalyzer.TRANSFORMER_NAME, providerAnalyzer)
+        );
     }
 
     private String createSootClassPath() {
@@ -104,23 +102,34 @@ public class SootAnalysis {
         List<String> dexFileNames = findDexFiles();
 
         Set<String> allCpClassNames = new HashSet<>();
-
         List<FuzzingData> results = new ArrayList<>();
+
+        ContentProviderAnalyzer cpAnalyzer = new ContentProviderAnalyzer();
+        List<CpClassResult> allCpClassResults = new ArrayList<>();
+
         for (String filename : dexFileNames) {
             System.out.println(filename);
 
-            Set<String> cpClassNames = CpClassFinder.INSTANCE.findExportedCpClasses(filename);
+            Set<String> exportedCpClasses = CpClassFinder.INSTANCE.findExportedCpClasses(filename);
+
+            cpAnalyzer.targetClassNames = exportedCpClasses;
 
             if (parameters.printCpClassNames()) {
-                allCpClassNames.addAll(cpClassNames);
+                allCpClassNames.addAll(exportedCpClasses);
             }
 
-            SootBodyTransformer bodyTransformer = setupSoot(filename, cpClassNames);
+            SootBodyTransformer bodyTransformer = new SootBodyTransformer(filename, exportedCpClasses,
+                    fuzzingGenerator, statistics);
+
+            setupSoot(filename, bodyTransformer, cpAnalyzer);
             soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
 
             // Process results
             List<FuzzingData> appFormatResults = convertToAppFormat(bodyTransformer);
             results.addAll(appFormatResults);
+
+            List<CpClassResult> cpClassResults = bodyTransformer.getCpResults();
+            allCpClassResults.addAll(cpClassResults);
         }
 
         if (parameters.printCpClassNames()) {
@@ -131,6 +140,9 @@ public class SootAnalysis {
 
         String resultsFilePath = parameters.getResultsFilePath();
         FuzzingDataSerializer.INSTANCE.serialize(resultsFilePath, results);
+
+        cpAnalyzer.writeToFile();
+        ContentProviderAnalyzer.Companion.writeToFile("oldAnalyzerResults.json", allCpClassResults);
     }
 
     private List<FuzzingData> convertToAppFormat(SootBodyTransformer transformer) {

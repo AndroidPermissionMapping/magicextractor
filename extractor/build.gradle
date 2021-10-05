@@ -10,6 +10,7 @@ buildscript {
 plugins {
     id "org.jetbrains.kotlin.jvm"
     id 'application'
+    id 'org.jetbrains.kotlin.plugin.serialization'
 }
 apply plugin: 'java'
 apply plugin: 'kotlin'
@@ -34,6 +35,7 @@ mainClassName = 'cispa.permission.mapper.Main'
 
 dependencies {
     compile project(":cp-fuzzing-serialization")
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.0-RC"
 
     compile "ch.qos.logback:logback-core:1.2.3"
     compile "ch.qos.logback:logback-classic:1.2.3"

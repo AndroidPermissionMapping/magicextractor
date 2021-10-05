@@ -1,6 +1,8 @@
 package cispa.permission.mapper.soot;
 
+import cispa.permission.mapper.CpClassResult;
 import cispa.permission.mapper.Statistics;
+import cispa.permission.mapper.UriMatcherCall;
 import cispa.permission.mapper.extractors.MagicValueExtractor;
 import cispa.permission.mapper.fuzzer.FuzzingGenerator;
 import cispa.permission.mapper.magic.AnalyzeRefs;
@@ -26,7 +28,9 @@ public class SootBodyTransformer extends BodyTransformer {
 
     private final Set<String> providerUriMatchers;
     private final Map<String, List<FoundMagicValues>> cpClassToMagicValuesMap;
+    private final List<CpClassResult> cpResults;
 
+    private String currentProviderClassName;
     private String authorityName;
 
     public SootBodyTransformer(String dexFileName, Set<String> targetClassNames, FuzzingGenerator fuzzingGenerator, Statistics statistics) {
@@ -37,15 +41,18 @@ public class SootBodyTransformer extends BodyTransformer {
 
         providerUriMatchers = new HashSet<>();
         cpClassToMagicValuesMap = new HashMap<>();
+        cpResults = new ArrayList<>();
     }
 
     @Override
-    protected void internalTransform(Body b, String phaseName, Map<String, String> options) {
-        if (!needToProcessBody(b)) {
+    protected void internalTransform(Body body, String phaseName, Map<String, String> options) {
+        if (!needToProcessBody(body)) {
             return;
         }
 
-        SootMethod m = b.getMethod();
+        currentProviderClassName = body.getMethod().getDeclaringClass().getName();
+
+        SootMethod m = body.getMethod();
         SootClass superclass = m.getDeclaringClass();
         while (!superclass.getName().equals("android.content.ContentProvider") && superclass.hasSuperclass())
             superclass = superclass.getSuperclass();
@@ -100,6 +107,8 @@ public class SootBodyTransformer extends BodyTransformer {
         JimpleBody body = (JimpleBody) call.retrieveActiveBody();
         UnitPatchingChain units = body.getUnits();
         ArrayList<String> matches = new ArrayList<>();
+
+        List<UriMatcherCall> uriMatcherCalls = new ArrayList<>();
         for (Unit bx : units) {
             Stmt s = (Stmt) bx;
             if (s instanceof JInvokeStmt) {
@@ -108,33 +117,46 @@ public class SootBodyTransformer extends BodyTransformer {
                     String uri;
                     try {
                         String arg0 = immediateString(invoke.getArgBox(0));
+                        String arg1 = immediateString(invoke.getArgBox(1));
+
                         uri = "content://" + arg0 + "/";
 
                         if (authorityName == null) {
                             authorityName = uri;
                         }
-                    } catch (IllegalArgumentException e) {
-                        uri = "content://" + "???" + "/";
-                    }
-                    try {
-                        String arg1 = immediateString(invoke.getArgBox(1));
+
                         if (arg1 != null) {
                             uri += arg1;
                         }
+
+                        matches.add(uri);
+
+                        if (arg1 != null) {
+                            UriMatcherCall matcherCall = new UriMatcherCall(arg0, arg1, -1);
+                            uriMatcherCalls.add(matcherCall);
+                        }
+
                     } catch (IllegalArgumentException e) {
-                        uri += "???";
+                        // Cannot do anything if it doesn't work... :(
                     }
-                    matches.add(uri);
                 }
             }
 
 
         }
+
         providerUriMatchers.addAll(matches);
+
+        CpClassResult cpClassResult = new CpClassResult(currentProviderClassName, uriMatcherCalls);
+        cpResults.add(cpClassResult);
     }
 
     public Set<String> getProviderUriMatchers() {
         return providerUriMatchers;
+    }
+
+    public List<CpClassResult> getCpResults() {
+        return cpResults;
     }
 
     public String getAuthorityName() {
