@@ -26,10 +26,25 @@ public class SootAnalysis {
     private final FuzzingGenerator fuzzingGenerator;
     private final Statistics statistics;
 
+    private final List<ContentProviderAnalyzer> cpAnalyzers;
+
     public SootAnalysis(AnalysisParameters parameters) {
         this.parameters = parameters;
         fuzzingGenerator = new FuzzingGenerator();
         statistics = new Statistics();
+        cpAnalyzers = createAnalyzers();
+    }
+
+    private List<ContentProviderAnalyzer> createAnalyzers() {
+        List<ContentProviderAnalyzer> cpAnalyzers = new ArrayList<>();
+        if (parameters.findPhantomRefs()) {
+            PhantomClassFinder phantomClassFinder = new PhantomClassFinder();
+            cpAnalyzers.add(phantomClassFinder);
+        } else {
+            UriMatcherAnalyzer analyzer = new UriMatcherAnalyzer();
+            cpAnalyzers.add(analyzer);
+        }
+        return cpAnalyzers;
     }
 
     private static BufferedWriter prepare(String resultsFile) throws IOException {
@@ -44,8 +59,7 @@ public class SootAnalysis {
         return myWriter;
     }
 
-    private void setupSoot(String filePath, BodyTransformer bodyTransformer,
-                                          ContentProviderAnalyzer providerAnalyzer) {
+    private void setupSoot(String filePath, SootBodyTransformer bodyTransformer) {
         G.reset();
 
         Options sootOptions = Options.v();
@@ -76,9 +90,17 @@ public class SootAnalysis {
         Pack p = PackManager.v().getPack("jtp");
         p.add(new Transform("jtp.myTransform", bodyTransformer));
 
-        PackManager.v().getPack(ContentProviderAnalyzer.PHASE_NAME).add(
-                new Transform(ContentProviderAnalyzer.TRANSFORMER_NAME, providerAnalyzer)
-        );
+        for (ContentProviderAnalyzer analyzer : cpAnalyzers) {
+            String phaseName = analyzer.getPhaseName();
+            String transformerName = analyzer.getTransformerName();
+            Transformer transformer = analyzer.getTransformer();
+
+            Transform transform = new Transform(transformerName, transformer);
+            PackManager.v()
+                    .getPack(phaseName)
+                    .add(transform);
+        }
+
     }
 
     private String createSootClassPath() {
@@ -104,7 +126,6 @@ public class SootAnalysis {
         Set<String> allCpClassNames = new HashSet<>();
         List<FuzzingData> results = new ArrayList<>();
 
-        ContentProviderAnalyzer cpAnalyzer = new ContentProviderAnalyzer();
         List<CpClassResult> allCpClassResults = new ArrayList<>();
 
         for (String filename : dexFileNames) {
@@ -112,7 +133,15 @@ public class SootAnalysis {
 
             Set<String> exportedCpClasses = CpClassFinder.INSTANCE.findExportedCpClasses(filename);
 
-            cpAnalyzer.targetClassNames = exportedCpClasses;
+            if (parameters.findPhantomRefs()) {
+                PhantomClassFinder phantomClassFinder = (PhantomClassFinder) cpAnalyzers.get(0);
+                Set<String> targetClasses = phantomClassFinder.getTargetClassNames();
+                targetClasses.clear();
+                targetClasses.addAll(exportedCpClasses);
+            } else {
+                UriMatcherAnalyzer cpAnalyzer = (UriMatcherAnalyzer) cpAnalyzers.get(0);
+                cpAnalyzer.targetClassNames = exportedCpClasses;
+            }
 
             if (parameters.printCpClassNames()) {
                 allCpClassNames.addAll(exportedCpClasses);
@@ -121,7 +150,7 @@ public class SootAnalysis {
             SootBodyTransformer bodyTransformer = new SootBodyTransformer(filename, exportedCpClasses,
                     fuzzingGenerator, statistics);
 
-            setupSoot(filename, bodyTransformer, cpAnalyzer);
+            setupSoot(filename, bodyTransformer);
             soot.Main.main(new String[]{"-process-multiple-dex"}); // need to pass String[] (bug in soot)
 
             // Process results
@@ -136,13 +165,19 @@ public class SootAnalysis {
             allCpClassNames.forEach(System.out::println);
         }
 
+        if (parameters.findPhantomRefs()) {
+            PhantomClassFinder phantomClassFinder = (PhantomClassFinder) cpAnalyzers.get(0);
+            phantomClassFinder.printAllPhantomClassNames();
+        } else {
+            UriMatcherAnalyzer cpAnalyzer = (UriMatcherAnalyzer) cpAnalyzers.get(0);
+            cpAnalyzer.writeToFile();
+            UriMatcherAnalyzer.Companion.writeToFile("oldAnalyzerResults.json", allCpClassResults);
+        }
+
         statistics.print(false);
 
         String resultsFilePath = parameters.getResultsFilePath();
         FuzzingDataSerializer.INSTANCE.serialize(resultsFilePath, results);
-
-        cpAnalyzer.writeToFile();
-        ContentProviderAnalyzer.Companion.writeToFile("oldAnalyzerResults.json", allCpClassResults);
     }
 
     private List<FuzzingData> convertToAppFormat(SootBodyTransformer transformer) {

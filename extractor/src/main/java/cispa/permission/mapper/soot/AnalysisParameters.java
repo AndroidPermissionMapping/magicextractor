@@ -8,6 +8,7 @@ public class AnalysisParameters {
 
     private final boolean ignoreInts;
     private final boolean printCpClassNames;
+    private final boolean findPhantomRefs;
 
     public AnalysisParameters(
             String androidJarsFolderPath,
@@ -15,7 +16,8 @@ public class AnalysisParameters {
             String sootOutputFolderPath,
             String resultsFilePath,
             boolean ignoreInts,
-            boolean printCpClassNames
+            boolean printCpClassNames,
+            boolean findPhantomRefs
     ) {
         this.androidJarsFolderPath = androidJarsFolderPath;
         this.dexFolderPath = dexFolderPath;
@@ -23,6 +25,7 @@ public class AnalysisParameters {
         this.resultsFilePath = resultsFilePath;
         this.ignoreInts = ignoreInts;
         this.printCpClassNames = printCpClassNames;
+        this.findPhantomRefs = findPhantomRefs;
     }
 
     public String getAndroidJarsFolderPath() {
@@ -47,5 +50,9 @@ public class AnalysisParameters {
 
     public boolean printCpClassNames() {
         return printCpClassNames;
+    }
+
+    public boolean findPhantomRefs() {
+        return findPhantomRefs;
     }
 }

@@ -12,6 +12,7 @@ public class CommandLineParser {
     private static final String ARG_IGNORE_INTS = "dont-ignore-ints";
 
     private static final String ARG_PRINT_CP_CLASSNAMES = "print_cp_classnames";
+    private static final String ARG_FIND_CP_PHANTOM_REFS = "find_cp_phantom_refs";
 
     private Options options;
     private HelpFormatter helpFormatter;
@@ -48,6 +49,10 @@ public class CommandLineParser {
                 "Print all content provider class names.");
         options.addOption(printCpClassNames);
 
+        Option findPhantomReferences = new Option(ARG_FIND_CP_PHANTOM_REFS, false,
+                "Find all phantom references.");
+        options.addOption(findPhantomReferences);
+
         return options;
     }
 
@@ -62,7 +67,8 @@ public class CommandLineParser {
                     commandLine.getOptionValue(ARG_SOOT),
                     commandLine.getOptionValue(ARG_RESULTS_FILE),
                     commandLine.getOptionValue(ARG_IGNORE_INTS) == null,
-                    commandLine.hasOption(ARG_PRINT_CP_CLASSNAMES)
+                    commandLine.hasOption(ARG_PRINT_CP_CLASSNAMES),
+                    commandLine.hasOption(ARG_FIND_CP_PHANTOM_REFS)
             );
         } catch (ParseException e) {
             System.out.println(e.getMessage());
