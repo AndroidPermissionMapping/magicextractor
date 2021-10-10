@@ -18,10 +18,23 @@ object CpClassFinder {
         // Parse AndroidManifest.xml
         try {
             val processManifest = ProcessManifest(apkFileName)
+            val packageName = processManifest.packageName
             for (provider in processManifest.providers) {
                 val cpManifestEntry: ContentProviderManifestEntry = parseProviderEntry(provider)
                 if (cpManifestEntry.isExported) {
-                    cpClassNames.add(cpManifestEntry.className)
+                    val cpClassName: String = if (!cpManifestEntry.className.startsWith(packageName)) {
+                        var className = cpManifestEntry.className
+                        if (className.startsWith(".")) {
+                            className = className.substring(1)
+                        }
+
+                        "$packageName.$className";
+
+                    } else {
+                        cpManifestEntry.className
+                    }
+
+                    cpClassNames.add(cpClassName)
                 }
             }
 
