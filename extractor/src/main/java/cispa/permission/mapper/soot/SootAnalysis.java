@@ -87,6 +87,9 @@ public class SootAnalysis {
             sootOptions.set_output_dir(outputFolderPath);
         }
 
+        /*PackManager.v().getPack(DbSchemeExtractor.PHASE_NAME).add(
+                new Transform(DbSchemeExtractor.TRANSFORMER_NAME, schemeExtractor)); */
+
         Pack p = PackManager.v().getPack("jtp");
         p.add(new Transform("jtp.myTransform", bodyTransformer));
 
@@ -126,12 +129,15 @@ public class SootAnalysis {
         Set<String> allCpClassNames = new HashSet<>();
         List<FuzzingData> results = new ArrayList<>();
 
+        DbSchemeExtractor schemeExtractor = new DbSchemeExtractor();
+
         List<CpClassResult> allCpClassResults = new ArrayList<>();
 
         for (String filename : dexFileNames) {
             System.out.println(filename);
 
             Set<String> exportedCpClasses = CpClassFinder.INSTANCE.findExportedCpClasses(filename);
+            // cpAnalyzer.targetClassNames = exportedCpClasses;
 
             if (parameters.findPhantomRefs()) {
                 PhantomClassFinder phantomClassFinder = (PhantomClassFinder) cpAnalyzers.get(0);
@@ -142,6 +148,8 @@ public class SootAnalysis {
                 UriMatcherAnalyzer cpAnalyzer = (UriMatcherAnalyzer) cpAnalyzers.get(0);
                 cpAnalyzer.targetClassNames = exportedCpClasses;
             }
+
+            schemeExtractor.providerClassNames = exportedCpClasses;
 
             if (parameters.printCpClassNames()) {
                 allCpClassNames.addAll(exportedCpClasses);
@@ -178,6 +186,14 @@ public class SootAnalysis {
 
         String resultsFilePath = parameters.getResultsFilePath();
         FuzzingDataSerializer.INSTANCE.serialize(resultsFilePath, results);
+
+        Set<String> providersUsingSqLiteDb = schemeExtractor.getProvidersUsingSqLiteDb();
+        if (!providersUsingSqLiteDb.isEmpty()) {
+            System.out.println("Providers using a SQLite Database:");
+            for (String providerClassName : providersUsingSqLiteDb) {
+                System.out.println(providerClassName);
+            }
+        }
     }
 
     private List<FuzzingData> convertToAppFormat(SootBodyTransformer transformer) {
